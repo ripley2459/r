@@ -28,9 +28,7 @@ class R
     public static function require(string...$args): void
     {
         foreach ($args as $arg) {
-            if (!($_GET[$arg] || $_POST[$arg])) {
-                throw new InvalidArgumentException('Missing argument: ' . $arg . '!');
-            }
+            if (!(isset($_GET[$arg]) || isset($_POST[$arg]))) throw new InvalidArgumentException('Missing argument: ' . $arg . '!');
         }
     }
 
@@ -102,20 +100,20 @@ class R
      */
     public static function createFunctionJS(string $name, mixed...$args): string
     {
+        $parseIfNecessary = function (mixed &$value): void {
+            if (is_string($value)) {
+                if (str_contains($value, 'noparse:')) $value = str_replace('noparse:', R::EMPTY, $value);
+                else self::parse($value);
+            }
+        };
+
         $joined = self::EMPTY;
         if (count($args) >= 1) {
-            if (is_string($args[0])) self::parse($args[0]);
+            $parseIfNecessary($args[0]);
             $joined = $args[0];
             for ($i = 1; $i < count($args); $i++) {
                 $joined .= ',';
-                if (is_string($args[$i])) {
-                    if (str_contains($args[$i], 'noparse:')) {
-                        $args[$i] = str_replace('noparse:', R::EMPTY, $args[$i]);
-                    } else {
-                        self::parse($args[$i]);
-                    }
-                }
-
+                $parseIfNecessary($args[$i]);
                 $joined .= $args[$i];
             }
         }
@@ -135,6 +133,38 @@ class R
     }
 
     /**
+     * Accepts strings and arrays of strings and adds everything together using a separator.
+     * @param string $separator
+     * @param mixed ...$values Any string or string array.
+     * @return string All values concatenated together.
+     */
+    public static function concat(string $separator, mixed...$values): string
+    {
+        $main = self::EMPTY;
+        foreach ($values as $value) {
+            self::checkArgument(is_string($value) || is_array($value));
+            if (is_string($value)) self::append($main, $separator, $value);
+            else if (is_array($value)) {
+                if (!self::nullOrEmpty($main)) $main .= $separator;
+                $main .= self::concat($separator, ...$value);
+            }
+        }
+
+        return $main;
+    }
+
+    /**
+     * Convenience method to check if the given argument is true and throw an exception if not.
+     * @param bool $arg The argument to check.
+     * @param string $message Message for the exception.
+     * @return void
+     */
+    public static function checkArgument(bool $arg, string $message = self::EMPTY): void
+    {
+        if (!$arg) throw new InvalidArgumentException($message);
+    }
+
+    /**
      * Concatenates multiple strings with a specified separator into a main string.
      * @param string &$main The main string to concatenate into.
      * @param string $separator The separator to place between concatenated strings.
@@ -142,7 +172,7 @@ class R
      * @return void
      * @see implode()
      */
-    public static function concat(string &$main, string $separator, string...$strings): void
+    public static function append(string &$main, string $separator, string...$strings): void
     {
         $main = !self::nullOrEmpty($main) ? $main : self::EMPTY;
 
@@ -159,11 +189,11 @@ class R
      * @param string $string The string to check.
      * @return bool Returns true if the string is null or contains only whitespace; otherwise, returns false.
      */
-    public static function nullOrEmpty(string $string): bool
+    public static function nullOrEmpty(string &$string): bool
     {
         return !isset($string) || trim($string) === self::EMPTY;
     }
-    
+
     /**
      * Clamp int|float within bounds.
      * @param int|float $value
@@ -178,17 +208,6 @@ class R
     }
 
     /**
-     * Convenience method to check if the given argument is true and throw an exception if not.
-     * @param bool $arg The argument to check.
-     * @param string $message Message for the exception.
-     * @return void
-     */
-    public static function checkArgument(bool $arg, string $message = self::EMPTY): void
-    {
-        if (!$arg) throw new InvalidArgumentException($message);
-    }
-
-    /**
      * Hacky way to cast an object to class.
      * Uses PHP serialization to transform an object to another.
      * @link https://gist.github.com/borzilleri/960035
@@ -196,7 +215,7 @@ class R
      * @see https://www.php.net/manual/fr/function.unserialize.php
      * @param mixed $object The object you want to cast.
      * @param string $className The destination class name.
-     * @return mixed Your casted object.
+     * @return mixed The casted object.
      */
     public static function cast(mixed $object, string $className): mixed
     {
@@ -204,6 +223,20 @@ class R
         self::checkArgument(class_exists($className), sprintf('Unknown class: %s.', $className));
         // self::checkArgument(is_subclass_of($className, get_class($object), sprintf('%s is not a descendant of $object class: %s.', $className, get_class($object))));
         return unserialize(preg_replace('/^O:\d+:"[^"]++"/', 'O:' . strlen($className) . ':"' . $className . '"', serialize($object)));
+    }
+
+    /**
+     * Prefixes all elements in the given array with the specified prefix.
+     * @param string $prefix The prefix to add to each element.
+     * @param array $array The array of elements to be prefixed.
+     * @return void
+     */
+    public static function prefix(string $prefix, array &$array): void
+    {
+        array_walk($array, function (&$element) use ($prefix) {
+            self::checkArgument(is_string($element), 'The prefix function works only with strings!');
+            $element = $prefix . $element;
+        });
     }
 
     /**
