@@ -10,14 +10,19 @@
 class R
 {
     /**
-     * Empty string that equal '';
+     * Empty string that equals '';
      */
     public const EMPTY = '';
 
     /**
-     * Space string that equal ' ';
+     * Space string that equals ' ';
      */
     public const SPACE = ' ';
+    /**
+     * Primitive event system.
+     * @var array The array that contains every event and their functions.
+     */
+    private static array $_events;
 
     /**
      * Check if provided arguments are presents in the GET or in the POST method.
@@ -240,7 +245,7 @@ class R
     }
 
     /**
-     * Saves result of the first call then returns the cached value.
+     * Saves a result of the first call then returns the cached value.
      * @param $target
      * @return __anonymous
      * @example memoize($user)->count();
@@ -261,5 +266,52 @@ class R
                 return $this->memo[$this->target][$signature] ??= $this->target->$method(...$params);
             }
         };
+    }
+
+    /**
+     * Primitive event system.
+     * Allow you to bind a function to an event.
+     * @param string $name The name of your event.
+     * @param callable $function The function that will be executed when R::Call($name) is called.
+     * @return void
+     * @see call
+     * @see unbind
+     * @example R::bind('myEvent', function(int $x) { return $x++; });
+     */
+    public static function bind(string $name, callable $function): void
+    {
+        self::checkArgument(!self::nullOrEmpty($name) && is_callable($function), 'Invalid event binding!');
+        self::$_events[$name][] = $function;
+    }
+
+    /**
+     * Primitive event system.
+     * Allow you to delete an event.
+     * @param string $name The name of your event.
+     * @return void
+     * @see call
+     * @see bind
+     * @example R::unbind('myEvent');
+     */
+    public static function unbind(string $name): void
+    {
+        unset(self::$_events[$name]);
+    }
+
+    /**
+     * Primitive event system.
+     * Allows you to perform each function bound to the provided event.
+     * @param string $name The name of your event.
+     * @return void
+     * @see unbind
+     * @see bind
+     * @example R::call('myEvent', 2);
+     */
+    public static function call(string $name): void
+    {
+        self::checkArgument(!self::nullOrEmpty($name) && is_callable(self::$_events[$name]), 'Invalid event name!');
+        $args = func_get_args();
+        array_shift($args);
+        self::checkArgument(call_user_func_array(self::$_events[$name], $args) !== false, 'Event function failed!');
     }
 }
