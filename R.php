@@ -183,15 +183,19 @@ class R
     /**
      * Prefixes all elements in the given array with the specified prefix.
      * @param string $prefix The prefix to add to each element.
-     * @param array $array The array of elements to be prefixed.
+     * @param string|array $input element(s) to be prefixed.
      * @return void
      */
-    public static function prefix(string $prefix, array &$array): void
+    public static function prefix(string $prefix, string|array &$input): void
     {
-        array_walk($array, function (&$element) use ($prefix) {
-            self::checkArgument(self::canBeString($element), 'The prefix function works only with strings!');
-            $element = $prefix . $element;
-        });
+        if (is_string($input))
+            $input = $prefix . $input;
+
+        if (is_array($input))
+            array_walk($input, function (&$element) use ($prefix) {
+                self::checkArgument(self::canBeString($element), 'The prefix function works only with strings!');
+                $element = $prefix . $element;
+            });
     }
 
     /**
@@ -202,20 +206,6 @@ class R
     public static function canBeString(mixed &$value): bool
     {
         return is_string($value) || is_scalar($value) || $value instanceof Stringable;
-    }
-
-    /**
-     * Apply a suffix on all elements in the given array.
-     * @param string $suffix The suffix to add to each element.
-     * @param array $array The array of elements to be suffixed.
-     * @return void
-     */
-    public static function suffix(string $suffix, array &$array): void
-    {
-        array_walk($array, function (&$element) use ($suffix) {
-            self::checkArgument(self::canBeString($element), 'The suffix function works only with strings!');
-            $element = $element . $suffix;
-        });
     }
 
     /**
@@ -355,5 +345,94 @@ class R
                 $main .= $separator . $strings[$i];
             }
         }
+    }
+
+    /**
+     * Compresses an image file, reducing its dimensions based on a specified compression percentage, and saves the compressed image with a new suffix.
+     * @param string $path The path to the original image file.
+     * @param string $suffix The suffix to add to the filename of the compressed image.
+     * @param int $compression The compression percentage ]0;10[ to apply to the image.
+     * @throws InvalidArgumentException if the provided file is not a supported image type, or if any errors occur during image processing.
+     */
+    public static function compress(string $path, string $suffix, int $compression): void
+    {
+        R::checkArgument($compression >= 1 && $compression < 100);
+
+        $mimeType = mime_content_type($path);
+        R::checkArgument(in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']));
+
+        $imageData = file_get_contents($path);
+        R::checkArgument($imageData !== false);
+
+        $image = imagecreatefromstring($imageData);
+        R::checkArgument($image instanceof GdImage);
+
+        $width = imagesx($image);
+        $height = imagesy($image);
+        $newWidth = round($width - ($width * $compression) / 100);
+        $newHeight = round($height - ($height * $compression) / 100);
+        $comp = imagecreatetruecolor($newWidth, $newHeight);
+        R::checkArgument($comp instanceof GdImage);
+        R::checkArgument(imagecopyresized($comp, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height));
+
+        $name = $path;
+        self::suffix($suffix, $name);
+        switch ($mimeType) {
+            case 'image/jpeg':
+                imagejpeg($comp, $name);
+                break;
+            case 'image/png':
+                imagepng($comp, $name);
+                break;
+            case 'image/gif':
+                imagegif($comp, $name);
+                break;
+            case 'image/webp':
+                imagewebp($comp, $name);
+                break;
+            case 'image/bmp':
+                imagebmp($comp, $name);
+                break;
+        }
+    }
+
+    /**
+     * Suffix all elements in the given array with the specified suffix.
+     * Keep the extension.
+     * @param string $suffix The prefix to add to each element.
+     * @param string|array $input element(s) to be suffixed.
+     * @return void
+     */
+    public static function suffix(string $suffix, string|array &$input): void
+    {
+        $buildValue = function ($suffix, &$input): void {
+            $infos = R::pathInfos($input);
+            $input = $infos['dirname'] . ($infos['dirname'] == R::EMPTY ? R::EMPTY : '/') . $infos['filename'] . $suffix . ($infos['extension'] == R::EMPTY ? R::EMPTY : '.' . $infos['extension']);
+        };
+
+        if (is_string($input)) $buildValue($suffix, $input);
+
+        if (is_array($input))
+            array_walk($input, function (&$element) use ($suffix, $buildValue) {
+                self::checkArgument(self::canBeString($element), 'The suffix function works only with strings!');
+                $buildValue($suffix, $element);
+            });
+    }
+
+    /**
+     * Convenient method to use pathinfo($path) and prevents unset values.
+     * Extracts information from a file path and returns it as an associative array.
+     * @param string $path The file path to extract information from.
+     * @return array An associative array containing information about the file path, including 'dirname', 'basename', 'extension', and 'filename'.
+     * @see pathinfo()
+     */
+    public static function pathInfos(string $path): array
+    {
+        $infos = pathinfo($path);
+        $infos['dirname'] = isset($infos['dirname']) && $infos['dirname'] != '.' ? $infos['dirname'] : self::EMPTY;
+        $infos['basename'] = $infos['basename'] ?? self::EMPTY;
+        $infos['extension'] = $infos['extension'] ?? self::EMPTY;
+        $infos['filename'] = $infos['filename'] ?? self::EMPTY;
+        return $infos;
     }
 }
