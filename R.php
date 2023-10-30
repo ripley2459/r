@@ -6,6 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
+ * @version 7
  */
 class R
 {
@@ -188,9 +189,7 @@ class R
      */
     public static function prefix(string $prefix, string|array &$input): void
     {
-        if (is_string($input))
-            $input = $prefix . $input;
-
+        if (is_string($input)) $input = $prefix . $input;
         if (is_array($input))
             array_walk($input, function (&$element) use ($prefix) {
                 self::checkArgument(self::canBeString($element), 'The prefix function works only with strings!');
@@ -236,7 +235,7 @@ class R
      * Primitive event system.
      * Allow you to bind a function to an event.
      * @param string $name The name of your event.
-     * @param callable $function The function that will be executed when R::Call($name) is called.
+     * @param callable $function The function that will be executed when R::call($name) is called.
      * @return void
      * @see call
      * @see unbind
