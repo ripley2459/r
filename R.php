@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 7
+ * @version 8
  */
 class R
 {
@@ -345,20 +345,18 @@ class R
             }
         }
     }
-
     /**
-     * Compresses an image file, reducing its dimensions based on a specified compression percentage, and saves the compressed image with a new suffix.
-     * @param string $path The path to the original image file.
-     * @param string $suffix The suffix to add to the filename of the compressed image.
-     * @param int $compression The compression percentage ]0;10[ to apply to the image.
-     * @throws InvalidArgumentException if the provided file is not a supported image type, or if any errors occur during image processing.
+     * Resizes the image to the specified dimensions (keep the ratio if the height is not provided), and saves the resized image (name is suffixed with the new dimensions).
+     * It supports common image formats such as JPEG, PNG, BMP, and WEBP.
+     * @param string $path The path to the image file to be resized.
+     * @param int $newWidth The new width of the image.
+     * @param int|null $newHeight The new height of the image (optional).
+     * @throws InvalidArgumentException If the provided image path is invalid, or if the image cannot be loaded and processed.
      */
-    public static function compress(string $path, string $suffix, int $compression): void
+    public static function resize(string $path, int $newWidth, int $newHeight = null): void
     {
-        R::checkArgument($compression >= 1 && $compression < 100);
-
-        $mimeType = mime_content_type($path);
-        R::checkArgument(in_array($mimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp']));
+        $type = exif_imagetype($path);
+        R::checkArgument(in_array($type, [2/* JPEG */, 3/* PNG */, 6/* BMP */, 18/* WEBP */]));
 
         $imageData = file_get_contents($path);
         R::checkArgument($imageData !== false);
@@ -368,28 +366,43 @@ class R
 
         $width = imagesx($image);
         $height = imagesy($image);
-        $newWidth = round($width - ($width * $compression) / 100);
-        $newHeight = round($height - ($height * $compression) / 100);
+
+        if (!isset($newHeight)) {
+            $ratio = $width / $height;
+            if ($width > $height) $newHeight = floor($newWidth / $ratio);
+            else {
+                $newHeight = $newWidth;
+                $newWidth = floor($newWidth * $ratio);
+            }
+        }
+
         $comp = imagecreatetruecolor($newWidth, $newHeight);
         R::checkArgument($comp instanceof GdImage);
-        R::checkArgument(imagecopyresized($comp, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height));
+
+        if ($type == 1 || $type == 3) {
+            imagecolortransparent($comp, imagecolorallocate($comp, 0, 0, 0));
+            if ($type == 3) {
+                imagealphablending($comp, false);
+                imagesavealpha($comp, true);
+            }
+        }
+
+        R::checkArgument(imagecopyresampled($comp, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height));
 
         $name = $path;
+        $suffix = '_' . $newWidth . 'x' . ($newHeight ?? $newWidth);
         self::suffix($suffix, $name);
-        switch ($mimeType) {
-            case 'image/jpeg':
-                imagejpeg($comp, $name);
+        switch ($type) {
+            case 2:
+                imagejpeg($comp, $name, 100);
                 break;
-            case 'image/png':
-                imagepng($comp, $name);
+            case 3:
+                imagepng($comp, $name, 0);
                 break;
-            case 'image/gif':
-                imagegif($comp, $name);
-                break;
-            case 'image/webp':
+            case 18:
                 imagewebp($comp, $name);
                 break;
-            case 'image/bmp':
+            case 6:
                 imagebmp($comp, $name);
                 break;
         }
@@ -433,5 +446,38 @@ class R
         $infos['extension'] = $infos['extension'] ?? self::EMPTY;
         $infos['filename'] = $infos['filename'] ?? self::EMPTY;
         return $infos;
+    }
+
+    /**
+     * Checks if all the given keys are in the provided table. Does not check the associated value.
+     * @param array $array The array to verify.
+     * @param array $keys The keys whose presence must be checked.
+     * @return bool True only if all array_key_exists($key, $array) is true.
+     * @see array_key_exists()
+     */
+    public static function allKeysExist(array $array, array $keys): bool
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $array)) return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Checks if the provided array is a square array, meaning that it has the same number of rows and columns.
+     * @param array $array The array to be checked.
+     * @return int|bool The size of the square array if it is square, or false otherwise.
+     */
+    public static function isSquareArray(array $array): int|bool
+    {
+        R::checkArgument(!empty($array));
+
+        $amount = count($array[0]);
+        foreach ($array as $column) {
+            if ($amount != count($column)) return false;
+        }
+
+        return $amount;
     }
 }
