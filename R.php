@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 8
+ * @version 9
  */
 class R
 {
@@ -104,6 +104,7 @@ class R
      * @param string $name The name of the JavaScript function.
      * @param mixed ...$args An arbitrary number of arguments to pass to the JavaScript function.
      * @return string A JavaScript function call string with the specified name and arguments.
+     * @deprecated
      */
     public static function createFunctionJS(string $name, mixed...$args): string
     {
@@ -153,14 +154,41 @@ class R
     }
 
     /**
-     * Convenience method to check if the given argument is true and throw an exception if not.
-     * @param bool $arg The argument to check.
-     * @param string $message Message for the exception.
-     * @return void
+     * Convenience method to check if validity of a boolean argument.
+     * @param bool $arg The boolean argument to be validated.
+     * @param string $message A custom error message to be used when the argument is invalid.
+     * @param bool $noException If set to true, exceptions will not be thrown, and the method will terminate the script with an echoed message instead.
+     * @throws InvalidArgumentException If $arg is false and $noException is false.
      */
-    public static function checkArgument(bool $arg, string $message = self::EMPTY): void
+    public static function checkArgument(bool $arg, string $message = self::EMPTY, bool $noException = false): void
     {
-        if (!$arg) throw new InvalidArgumentException($message);
+        if ($noException) {
+            if (!$arg) {
+                echo self::blank($message) ? 'Provided argument is not valid!' : $message;
+                die;
+            }
+        } else if (!$arg) throw new InvalidArgumentException($message);
+    }
+
+    /**
+     * Determines if a given value is considered "blank" based on various conditions.
+     * Conditions checked:
+     * 1. If the value is null, it is considered blank.
+     * 2. If the value is a string, it is considered blank if its trimmed version is equal to the R::EMPTY constant.
+     * 3. If the value is numeric or a boolean, it is not considered blank.
+     * 4. If the value is an instance of Countable (e.g., an array), it is considered blank if it has zero elements.
+     * 5. For other cases, the function uses the empty() function to check if the value is blank.
+     * @param mixed &$value The value to check for blankness.
+     * @return bool Returns true if the value is considered blank, otherwise returns false.
+     * @see empty()
+     */
+    public static function blank(mixed &$value): bool
+    {
+        if (is_null($value)) return true;
+        if (is_string($value)) return trim($value) === self::EMPTY;
+        if (is_numeric($value) || is_bool($value)) return false;
+        if ($value instanceof Countable) return count($value) === 0;
+        return empty($value);
     }
 
     /**
@@ -248,20 +276,6 @@ class R
     }
 
     /**
-     * Checks if a given value is blank (null, empty, equals to R::Empty or count === 0).
-     * @param mixed &$value The value to be checked.
-     * @return bool Returns true if the value is null or empty, otherwise false.
-     */
-    public static function blank(mixed &$value): bool
-    {
-        if (is_null($value)) return true;
-        if (is_string($value)) return trim($value) === self::EMPTY;
-        if (is_numeric($value) || is_bool($value)) return false;
-        if ($value instanceof Countable) return count($value) === 0;
-        return empty($value);
-    }
-
-    /**
      * Primitive event system.
      * Allow you to delete an event.
      * @param string $name The name of your event.
@@ -345,6 +359,7 @@ class R
             }
         }
     }
+
     /**
      * Resizes the image to the specified dimensions (keep the ratio if the height is not provided), and saves the resized image (name is suffixed with the new dimensions).
      * It supports common image formats such as JPEG, PNG, BMP, and WEBP.
