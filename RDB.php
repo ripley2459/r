@@ -4,7 +4,7 @@ class RDB
 {
     const COMPARE = ['=', '!=', '<', '<>', '>', '<=', '>='];
     const JOIN = ['INNER', 'LEFT', 'RIGHT', 'LEFT OUTER', 'RIGHT OUTER'];
-    const ORDER_BY = ['ASC', 'DESC', 'RAND()'];
+    const ORDER_BY = ['ASC', 'DESC'/*, 'RAND()'*/];
     const AND_OR = ['AND', 'OR'];
     const LOGIC = ['ALL', 'AND', 'ANY', 'BETWEEN', 'EXISTS', 'IN', 'LIKE', 'NOT', 'OR', 'SOME'];
     private static array $_args;
@@ -35,7 +35,7 @@ class RDB
      * - 'user': The username for the database connection.
      * - 'password': The password for the database user.
      * - 'prefix': A database table prefix (if applicable).
-     * - 'sqlPath': The path to SQL files (if used for database setup).
+     * - 'sqlPath': The path to SQL files (used for database setup and scripts execution).
      *
      * If the connection is successfully established, it returns an instance of the RDB class, which can be used to interact with the database.
      * If any errors occur during the connection attempt, it throws a PDOException with an error message.

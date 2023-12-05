@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 9
+ * @version 10
  */
 class R
 {
@@ -162,9 +162,10 @@ class R
      */
     public static function checkArgument(bool $arg, string $message = self::EMPTY, bool $noException = false): void
     {
+        $message = self::blank($message) ? 'Provided argument is not valid!' : $message;
         if ($noException) {
             if (!$arg) {
-                echo self::blank($message) ? 'Provided argument is not valid!' : $message;
+                echo $message;
                 die;
             }
         } else if (!$arg) throw new InvalidArgumentException($message);
@@ -314,9 +315,26 @@ class R
      */
     public static function nextName(string $destination, int $iteration = 0): string
     {
-        $infos = pathinfo($destination);
+        $infos = self::pathInfos($destination);
         $tryName = $iteration == 0 ? $destination : self::concat(self::EMPTY, $infos['dirname'], '/', $infos['filename'], '_', $iteration, '.', $infos['extension']);
         return file_exists($tryName) ? self::nextName($destination, $iteration + 1) : $tryName;
+    }
+
+    /**
+     * Convenient method to use pathinfo($path) and prevents unset values.
+     * Extracts information from a file path and returns it as an associative array.
+     * @param string $path The file path to extract information from.
+     * @return array An associative array containing information about the file path, including 'dirname', 'basename', 'extension', and 'filename'.
+     * @see pathinfo()
+     */
+    public static function pathInfos(string $path): array
+    {
+        $infos = pathinfo($path);
+        $infos['dirname'] = isset($infos['dirname']) && $infos['dirname'] != '.' ? $infos['dirname'] : self::EMPTY;
+        $infos['basename'] = $infos['basename'] ?? self::EMPTY;
+        $infos['extension'] = $infos['extension'] ?? self::EMPTY;
+        $infos['filename'] = $infos['filename'] ?? self::EMPTY;
+        return $infos;
     }
 
     /**
@@ -444,23 +462,6 @@ class R
                 self::checkArgument(self::canBeString($element), 'The suffix function works only with strings!');
                 $buildValue($suffix, $element);
             });
-    }
-
-    /**
-     * Convenient method to use pathinfo($path) and prevents unset values.
-     * Extracts information from a file path and returns it as an associative array.
-     * @param string $path The file path to extract information from.
-     * @return array An associative array containing information about the file path, including 'dirname', 'basename', 'extension', and 'filename'.
-     * @see pathinfo()
-     */
-    public static function pathInfos(string $path): array
-    {
-        $infos = pathinfo($path);
-        $infos['dirname'] = isset($infos['dirname']) && $infos['dirname'] != '.' ? $infos['dirname'] : self::EMPTY;
-        $infos['basename'] = $infos['basename'] ?? self::EMPTY;
-        $infos['extension'] = $infos['extension'] ?? self::EMPTY;
-        $infos['filename'] = $infos['filename'] ?? self::EMPTY;
-        return $infos;
     }
 
     /**
