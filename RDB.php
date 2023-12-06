@@ -1,10 +1,16 @@
 <?php
 
+/**
+ * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
+ * @author Cyril Neveu
+ * @link https://github.com/ripley2459/r
+ * @version 3
+ */
 class RDB
 {
     const COMPARE = ['=', '!=', '<', '<>', '>', '<=', '>='];
     const JOIN = ['INNER', 'LEFT', 'RIGHT', 'LEFT OUTER', 'RIGHT OUTER'];
-    const ORDER_BY = ['ASC', 'DESC'/*, 'RAND()'*/];
+    const ORDER_BY = ['ASC', 'DESC'/*, 'RAND()'*/]; // TODO Special case RAND()
     const AND_OR = ['AND', 'OR'];
     const LOGIC = ['ALL', 'AND', 'ANY', 'BETWEEN', 'EXISTS', 'IN', 'LIKE', 'NOT', 'OR', 'SOME'];
     private static array $_args;
@@ -16,18 +22,19 @@ class RDB
     private int $_offset = 0;
     private string $_orderBy = R::EMPTY;
     private array $_where = array();
+    private mixed $_data;
     private ?PDOStatement $_request = null;
 
-    private function __construct(string $operation, string $table, array $columns)
+    private function __construct(string $operation, string $table, array $columns, mixed $data)
     {
         $this->_operation = $operation;
         $this->_table = self::$_args['prefix'] . $table;
         $this->_columns = $columns;
+        $this->_data = $data;
     }
 
     /**
      * Start method initiates the database connection using the provided configuration.
-     *
      * This method sets up a connection to a MySQL database with the specified parameters:
      * - 'host': The hostname or IP address of the database server.
      * - 'dbname': The name of the database to connect to.
@@ -36,7 +43,6 @@ class RDB
      * - 'password': The password for the database user.
      * - 'prefix': A database table prefix (if applicable).
      * - 'sqlPath': The path to SQL files (used for database setup and scripts execution).
-     *
      * If the connection is successfully established, it returns an instance of the RDB class, which can be used to interact with the database.
      * If any errors occur during the connection attempt, it throws a PDOException with an error message.
      * @param array $args An associative array containing the necessary configuration parameters.
@@ -66,8 +72,7 @@ class RDB
      */
     public static function insert(string $table, array $columns, array $data): bool
     {
-
-        R::checkArgument(isset(self::$_pdo) && count($columns) == count($data) && !empty($data));
+        R::checkArgument(!R::blank($columns) && !R::blank($data) && count($columns) == count($data));
         $amount = R::isSquareArray($data);
         R::checkArgument($amount != false);
 
@@ -97,6 +102,7 @@ class RDB
      */
     public function execute(): PDOStatement
     {
+        R::checkArgument(isset(self::$_pdo));
         if ($this->_request == null) $this->_request = self::$_pdo->prepare($this->getStatement());
         $this->bindValues($this->_request);
         R::checkArgument($this->_request->execute());
@@ -105,8 +111,34 @@ class RDB
 
     private function getStatement(): string
     {
-        $statement = R::concat(R::SPACE, $this->_operation, implode(', ', $this->_columns), 'FROM', $this->_table);
+        if ($this->_operation == 'UPDATE') { // Special case // TODO Separate each operation in different classes
+            $statement = R::concat(R::SPACE, $this->_operation, $this->_table);
 
+            $vars = R::EMPTY;
+            for ($i = 0; $i < count($this->_columns); $i++) {
+                R::append($vars, ', ', $this->_columns[$i] . ' = :' . $this->_columns[$i]);
+            }
+
+            $statement = R::concat(R::SPACE, $statement, 'SET', $vars);
+            $this->bindWhere($statement);
+        } else {
+            $statement = R::concat(R::SPACE, $this->_operation, implode(', ', $this->_columns), 'FROM', $this->_table);
+            $this->bindWhere($statement);
+            if (!R::blank($this->_orderBy)) R::append($statement, R::SPACE, 'ORDER BY', $this->_orderBy);
+            if ($this->_limit > 0 && $this->_offset > 0) {
+                R::append($statement, R::SPACE, 'LIMIT', ':limit', ',', ':offset');
+            } else if ($this->_limit > 0) R::append($statement, R::SPACE, 'LIMIT', ':limit');
+        }
+
+        return $statement;
+    }
+
+    /**
+     * @param string $statement
+     * @return void
+     */
+    public function bindWhere(string &$statement): void
+    {
         if (!empty($this->_where)) {
             $statement .= ' WHERE ';
             $statement .= $this->_where[0]->getStatement($this->_table);
@@ -114,18 +146,16 @@ class RDB
                 R::append($statement, R::SPACE, 'AND', $this->_where[$i]->getStatement($this->_table));
             }
         }
-
-        if (!R::blank($this->_orderBy)) R::append($statement, R::SPACE, 'ORDER BY', $this->_orderBy);
-
-        if ($this->_limit > 0 && $this->_offset > 0) {
-            R::append($statement, R::SPACE, 'LIMIT', ':limit', ',', ':offset');
-        } else if ($this->_limit > 0) R::append($statement, R::SPACE, 'LIMIT', ':limit');
-
-        return $statement;
     }
 
     private function bindValues(PDOStatement &$request): void
     {
+        if ($this->_operation == 'UPDATE') {
+            for ($i = 0; $i < count($this->_columns); $i++) {
+                $request->bindValue(':' . $this->_columns[$i], $this->_data[$i]);
+            }
+        }
+
         foreach ($this->_where as $where) {
             $where->bindValues($request);
         }
@@ -134,6 +164,12 @@ class RDB
             $request->bindValue(':limit', $this->_limit, PDO::PARAM_INT);
             $request->bindValue(':offset', $this->_offset, PDO::PARAM_INT);
         } else if ($this->_limit > 0) $request->bindValue(':limit', $this->_limit, PDO::PARAM_INT);
+    }
+
+    public static function update(string $table, array $columns, array $data): RDB
+    {
+        R::checkArgument(!R::blank($columns) && !R::blank($data) && count($columns) == count($data));
+        return new RDB('UPDATE', $table, $columns, $data);
     }
 
     /**
@@ -183,7 +219,12 @@ class RDB
      */
     public static function select(string $table, string ...$columns): RDB
     {
-        return new RDB('SELECT', $table, $columns);
+        return new RDB('SELECT', $table, $columns, null);
+    }
+
+    public static function delete(string $table): RDB
+    {
+        return new RDB('DELETE', $table, [], null);
     }
 
     public function orderBy(string $column, string $order): RDB
@@ -202,7 +243,7 @@ class RDB
 
     public function where(string $column, string $comparator = R::EMPTY, mixed $value = null): object
     {
-        $c = new RRequest($this, $this->_table, $column, $comparator, $value);
+        $c = new RDB_Where($this, $this->_table, $column, $comparator, $value); // TODO Or creating a anonymous class... :/
         $this->_where[] = $c;
         return R::blank($comparator) ? $c : $this;
     }

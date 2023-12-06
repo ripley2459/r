@@ -3,7 +3,7 @@
 require_once 'params.php';
 require_once 'R.php';
 require_once 'RDB.php';
-require_once 'RRequest.php';
+require_once 'RDB_Where.php';
 
 RDB::start(PARAMS); // Start the connection
 
@@ -29,15 +29,30 @@ $data = [
 ];
 RDB::insert('test', $columns, $data); // Fill
 
-$request = RDB::select('test', 'id', 'name', 'gender', 'age')
+$select = RDB::select($table, 'id', 'name', 'gender', 'age')
     ->where('name')->contains('a')
     ->where('age')->between(30, 40)
     ->where('gender', '=', 0)
     ->orderBy('age', 'DESC')
     ->execute();
 
-var_dump($request);
+var_dump($select);
 
-while ($d = $request->fetch(PDO::FETCH_ASSOC)) {
+while ($d = $select->fetch(PDO::FETCH_ASSOC)) {
     var_dump($d);
 }
+
+$delete = RDB::delete($table)
+    ->where('gender', '=', false)
+    ->execute();
+
+var_dump($delete);
+
+$data = [
+    'john', false, 111
+];
+$update = RDB::update($table, $columns, $data)
+    ->where('id', '=', 2)
+    ->execute();
+
+var_dump($update);

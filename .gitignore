@@ -1,3 +1,5 @@
 params.php
 
+composer.phar
+vendor/
 .idea/

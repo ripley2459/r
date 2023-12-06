@@ -1,6 +1,6 @@
 <?php
 
-class RRequest
+class RDB_Where
 {
     private RDB $_owner;
     private string $_table;
