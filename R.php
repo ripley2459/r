@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 10
+ * @version 11
  */
 class R
 {
@@ -340,13 +340,15 @@ class R
     /**
      * Accepts strings and arrays of strings and adds everything together using a separator.
      * @param string $separator
-     * @param mixed ...$values Any string or string array.
+     * @param mixed ...$strings Any string or string array.
      * @return string All values concatenated together.
      */
-    public static function concat(string $separator, mixed...$values): string
+    public static function concat(string $separator, mixed...$strings): string
     {
+        $strings = self::filterArray($strings);
         $main = self::EMPTY;
-        foreach ($values as $value) {
+
+        foreach ($strings as $value) {
             self::checkArgument(self::canBeString($value) || is_array($value));
             if (self::canBeString($value)) self::append($main, $separator, $value);
             else if (is_array($value)) {
@@ -359,6 +361,20 @@ class R
     }
 
     /**
+     * Filters an array, removing blank values.
+     * This method takes an array as input and uses the array_filter function to remove elements that are considered blank.
+     * The definition of blank is determined by the R::blank function.
+     * @param array $array The input array to be filtered.
+     * @return array The filtered array containing only non-blank values.
+     * @see blank()
+     * @see array_filter()
+     */
+    public static function filterArray(array $array): array
+    {
+        return array_filter($array, function (mixed $string) { return !R::blank($string); });
+    }
+
+    /**
      * Concatenates multiple strings with a specified separator into a main string.
      * @param string &$main The main string to concatenate into.
      * @param string $separator The separator to place between concatenated strings.
@@ -368,12 +384,14 @@ class R
      */
     public static function append(string &$main, string $separator, string...$strings): void
     {
+        $strings = self::filterArray($strings);
         $main = !self::blank($main) ? $main : self::EMPTY;
 
         if (count($strings) > 0) {
             $main = !R::blank($main) ? $main . $separator . $strings[0] : $strings[0];
             for ($i = 1; $i < count($strings); $i++) {
-                $main .= $separator . $strings[$i];
+                if (!self::blank($strings[$i]))
+                    $main .= $separator . $strings[$i];
             }
         }
     }
