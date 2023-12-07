@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 11
+ * @version 12
  */
 class R
 {
@@ -46,6 +46,7 @@ class R
      * @param mixed $default (Optional) The default value to return if $value is not in the whitelist.
      * @return mixed Returns $value if it's in the whitelist, otherwise returns $default or throws an exception if $default is not provided.
      * @throws InvalidArgumentException If $value is not in the whitelist and no $default is provided.
+     * @see in_array()
      */
     public static function whitelist(mixed $value, array $allowed, mixed $default = null): mixed
     {
@@ -57,12 +58,12 @@ class R
     /**
      * Sanitizes a string by replacing spaces with underscores and removing or replacing special characters.
      * @param string $string The input string to sanitize.
-     * @param bool $lightweight Set to true for a lightweight sanitization (only replaces spaces with underscores, "a  B c @$  aBc" -> "a_B_c_@$_aBc") or false for a stricter sanitization (also removes or replaces special characters, "a  B c @$  aBc" -> "a__B_c____aBc").
+     * @param bool $lightweight Set to true for a lightweight sanitization (only replaces spaces with underscores, " a  B c @$  aBc " -> "_a__B_c_@$__aBc_") or false for a stricter sanitization (also removes or replaces special characters, " a  B c @$  aBc " -> "a__B_c_____aBc").
      * @return string The sanitized string.
      */
     public static function sanitize(string $string, bool $lightweight = true): string
     {
-        return $lightweight ? preg_replace('/\s+/', '_', $string) : strtolower(preg_replace('/[^a-zA-Z0-9-_\.]/', '_', $string));
+        return $lightweight ? preg_replace('/\s/', '_', $string) : preg_replace('/[^a-zA-Z0-9]/', '_', trim($string));
     }
 
     /**

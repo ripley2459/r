@@ -48,7 +48,7 @@ class RDB_Where
         if (!R::blank($value)) {
             $this->_operation = 'LIKE %s';
             $this->_binding = [$this->getDefaultBinding() => '%' . $value . '%'];
-        }
+        } else array_pop($this->_owner->getWhere());
 
         return $this->_owner;
     }
@@ -58,7 +58,7 @@ class RDB_Where
         if (!R::blank($value)) {
             $this->_operation = 'LIKE %s';
             $this->_binding = [$this->getDefaultBinding() => '%' . $value];
-        }
+        } else array_pop($this->_owner->getWhere());
 
         return $this->_owner;
     }
@@ -73,7 +73,7 @@ class RDB_Where
             }
 
             $this->_operation = 'IN (' . $s . ')';
-        }
+        } else array_pop($this->_owner->getWhere());
 
         return $this->_owner;
     }
@@ -88,7 +88,7 @@ class RDB_Where
             }
 
             $this->_operation = 'NOT IN (' . $s . ')';
-        }
+        } else array_pop($this->_owner->getWhere());
 
         return $this->_owner;
     }

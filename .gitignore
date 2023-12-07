@@ -1,5 +1,6 @@
 params.php
 
+.phpunit.result.cache
 composer.phar
 vendor/
 .idea/

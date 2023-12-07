@@ -161,8 +161,8 @@ class RDB
         }
 
         if ($this->_limit > 0 && $this->_offset > 0) {
-            $request->bindValue(':limit', $this->_limit, PDO::PARAM_INT);
-            $request->bindValue(':offset', $this->_offset, PDO::PARAM_INT);
+            $request->bindValue(':limit', $this->_offset * $this->_limit - $this->_limit, PDO::PARAM_INT);
+            $request->bindValue(':offset', $this->_limit, PDO::PARAM_INT);
         } else if ($this->_limit > 0) $request->bindValue(':limit', $this->_limit, PDO::PARAM_INT);
     }
 
@@ -246,5 +246,13 @@ class RDB
         $c = new RDB_Where($this, $this->_table, $column, $comparator, $value); // TODO Or creating a anonymous class... :/
         $this->_where[] = $c;
         return R::blank($comparator) ? $c : $this;
+    }
+
+    /**
+     * @return array
+     */
+    public function &getWhere(): array
+    {
+        return $this->_where;
     }
 }

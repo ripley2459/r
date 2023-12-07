@@ -1,9 +1,7 @@
 <?php
 
 require_once 'params.php';
-require_once 'R.php';
-require_once 'RDB.php';
-require_once 'RDB_Where.php';
+require_once 'vendor/autoload.php';
 
 RDB::start(PARAMS); // Start the connection
 
