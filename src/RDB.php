@@ -22,14 +22,24 @@ class RDB
     private int $_offset = 0;
     private string $_orderBy = R::EMPTY;
     private array $_where = array();
+    private int $_whereAmount = 0;
+    private array $_joins = array();
     private mixed $_data;
     private ?PDOStatement $_request = null;
+    private ?string $_as;
 
     private function __construct(string $operation, string $table, array $columns, mixed $data)
     {
         $this->_operation = $operation;
         $this->_table = self::$_args['prefix'] . $table;
-        $this->_columns = $columns;
+
+        foreach ($columns as $column) {
+            if (!str_contains($column, '.')) {
+                $column = $this->_table . '.' . $column;
+                $this->_columns[] = $column;
+            }
+        }
+
         $this->_data = $data;
     }
 
@@ -123,6 +133,13 @@ class RDB
             $this->bindWhere($statement);
         } else {
             $statement = R::concat(R::SPACE, $this->_operation, implode(', ', $this->_columns), 'FROM', $this->_table);
+
+            if ($this->_operation == 'SELECT') {
+                foreach ($this->_joins as $join) {
+                    R::append($statement, R::SPACE, $join);
+                }
+            }
+
             $this->bindWhere($statement);
             if (!R::blank($this->_orderBy)) R::append($statement, R::SPACE, 'ORDER BY', $this->_orderBy);
             if ($this->_limit > 0 && $this->_offset > 0) {
@@ -139,11 +156,17 @@ class RDB
      */
     public function bindWhere(string &$statement): void
     {
+        $s = function ($where): string {
+            $stmt = $where->getStatement();
+            if ($where->isChained()) $stmt = '(' . $stmt . ')';
+            return $stmt;
+        };
+
         if (!empty($this->_where)) {
             $statement .= ' WHERE ';
-            $statement .= $this->_where[0]->getStatement($this->_table);
+            $statement .= $s($this->_where[0]);
             for ($i = 1; $i < count($this->_where); $i++) {
-                R::append($statement, R::SPACE, 'AND', $this->_where[$i]->getStatement($this->_table));
+                R::append($statement, R::SPACE, 'AND', $s($this->_where[$i]));
             }
         }
     }
@@ -200,19 +223,6 @@ class RDB
     }
 
     /**
-     * Checks if a table exists in the database.
-     * @param string $table The name of the table to check for existence.
-     * @return bool Returns true if the table exists; otherwise, returns false.
-     */
-    public static function show(string $table): bool
-    {
-        $r = self::command('SHOW TABLES LIKE \'' . self::$_args['prefix'] . $table . '\'');
-        $p = $r->rowCount() > 0;
-        $r->closecursor();
-        return $p;
-    }
-
-    /**
      * @param string $table
      * @param string ...$columns
      * @return RDB
@@ -225,6 +235,43 @@ class RDB
     public static function delete(string $table): RDB
     {
         return new RDB('DELETE', $table, [], null);
+    }
+
+    /**
+     * Checks and creates the associated table if necessary.
+     * @return bool True if the table exists or was created successfully.
+     */
+    public static function check(string $table, array $args): bool
+    {
+        if (self::show($table))
+            return true;
+
+        $a = R::EMPTY;
+        foreach ($args as $arg)
+            R::append($a, ', ', $arg);
+        $s = 'CREATE TABLE ' . self::$_args['prefix'] . $table . ' (' . $a . ')';
+        return RDB::command($s)->closeCursor();
+    }
+
+    /**
+     * Checks if a table exists in the database.
+     * @param string $table The name of the table to check for existence.
+     * @return bool Returns true if the table exists; otherwise, returns false.
+     */
+    public static function show(string $table): bool
+    {
+        $r = self::command('SHOW TABLES LIKE \'' . self::$_args['prefix'] . $table . '\'');
+        $p = $r->rowCount() > 0;
+        $r->closecursor();
+        return $p;
+    }
+
+    public static function getType(mixed $param): int
+    {
+        if (is_string($param)) return PDO::PARAM_STR;
+        if (is_int($param)) return PDO::PARAM_INT;
+        if (is_bool($param)) return PDO::PARAM_BOOL;
+        return PDO::PARAM_STR;
     }
 
     public function orderBy(string $column, string $order): RDB
@@ -241,11 +288,39 @@ class RDB
         return $this;
     }
 
+    public function as(string $newName): RDB
+    {
+        $this->_as = $newName;
+        return $this;
+    }
+
     public function where(string $column, string $comparator = R::EMPTY, mixed $value = null): object
     {
-        $c = new RDB_Where($this, $this->_table, $column, $comparator, $value); // TODO Or creating a anonymous class... :/
-        $this->_where[] = $c;
+        return $this->whereIMP($column, $comparator, $value, null);
+    }
+
+    private function whereIMP(string $column, string $comparator = R::EMPTY, mixed $value = null, string $operation = null): object
+    {
+        $table = $this->_as ?? $this->_table;
+        $this->_as = null;
+        $c = new RDB_Where($this, $table, $column, $comparator, $value, $this->_whereAmount++);
+        if ($operation == null) $this->_where[] = $c;
+        else {
+            $last = $this->_where[array_key_last($this->_where)];
+            $last->chain($operation, $c);
+        }
+
         return R::blank($comparator) ? $c : $this;
+    }
+
+    public function or(string $column, string $comparator = R::EMPTY, mixed $value = null): object
+    {
+        return $this->whereIMP($column, $comparator, $value, 'OR');
+    }
+
+    public function and(string $column, string $comparator = R::EMPTY, mixed $value = null): object
+    {
+        return $this->whereIMP($column, $comparator, $value, 'AND');
     }
 
     /**
@@ -254,5 +329,42 @@ class RDB
     public function &getWhere(): array
     {
         return $this->_where;
+    }
+
+    public function innerJoin(string $on, string $table, string $column): RDB
+    {
+        $this->join('INNER', $on, $table, $column);
+        return $this;
+    }
+
+    private function join(string $join, string $on, string $table, string $column): void
+    {
+        R::checkArgument($this->_operation == 'SELECT');
+        $as = $this->_as != null ? ' AS ' . $this->_as : R::EMPTY;
+        $this->_as = null;
+        $this->_joins[] = R::concat(R::SPACE, $join, 'JOIN', self::$_args['prefix'] . $table . $as, 'ON', $this->_table . '.' . $on, '=', self::$_args['prefix'] . $table . '.' . $column);
+    }
+
+    public function leftJoin(string $on, string $table, string $column): RDB
+    {
+        $this->join('LEFT', $on, $table, $column);
+        return $this;
+    }
+
+    public function rightJoin(string $on, string $table, string $column): RDB
+    {
+        $this->join('RIGHT', $on, $table, $column);
+        return $this;
+    }
+
+    public function fullJoin(string $on, string $table, string $column): RDB
+    {
+        $this->join('FULL OUTER', $on, $table, $column);
+        return $this;
+    }
+
+    public static function &getPDO(): PDO
+    {
+        return self::$_pdo;
     }
 }

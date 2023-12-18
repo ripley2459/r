@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 12
+ * @version 13
  */
 class R
 {
@@ -27,14 +27,14 @@ class R
     private static array $_events;
 
     /**
-     * Check if provided arguments are presents in the GET or in the POST method.
-     * @param string ...$args
+     * Check if provided parameters are presents in the GET or in the POST superglobal.
+     * @param string ...$parameters
      * @return void
      * @throws InvalidArgumentException If ONE is missing.
      */
-    public static function require(string...$args): void
+    public static function require(string...$parameters): void
     {
-        foreach ($args as $arg) {
+        foreach ($parameters as $arg) {
             if (!(isset($_GET[$arg]) || isset($_POST[$arg]))) throw new InvalidArgumentException('Missing argument: ' . $arg . '!');
         }
     }
@@ -191,6 +191,32 @@ class R
         if (is_numeric($value) || is_bool($value)) return false;
         if ($value instanceof Countable) return count($value) === 0;
         return empty($value);
+    }
+
+    /**
+     * Retrieves a specified parameter from either the GET or POST superglobals (in this order).
+     * @param string $parameter The name of the parameter to retrieve.
+     * @param mixed $default The default value to return if the parameter is not set.
+     * @param string $message Custom error message to display if the parameter is not set and no default is provided.
+     * @param bool $noException If true, echoes the error message and terminates script execution; otherwise, throws an exception.
+     * @return mixed The value of the specified parameter if set, default value if provided, or error handling based on $noException.
+     * @throws InvalidArgumentException If the parameter is not set, no default value is provided, and $noException is false.
+     * @see require()
+     */
+    public static function getParameter(string $parameter, mixed $default = null, string $message = R::EMPTY, bool $noException = false): mixed
+    {
+        $argument = R::EMPTY;
+        $message = R::blank($message) ? 'The required parameter is not provided and no default value is given!' : $message;
+
+        if (isset($_GET[$parameter])) $argument = $_GET[$parameter];
+        else if (isset($_POST[$parameter])) $argument = $_POST[$parameter];
+
+        if (!R::blank($argument)) return $argument;
+        if (isset($default)) return $default;
+        if ($noException) {
+            echo $message;
+            die;
+        } else throw new InvalidArgumentException($message);
     }
 
     /**
@@ -514,5 +540,11 @@ class R
         }
 
         return $amount;
+    }
+
+    public static function replaceFirst($search, $replace, $subject): string
+    {
+        $search = '/' . preg_quote($search, '/') . '/';
+        return preg_replace($search, $replace, $subject, 1);
     }
 }

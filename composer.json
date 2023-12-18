@@ -6,5 +6,8 @@
     "classmap": [
       "src/"
     ]
+  },
+  "require": {
+    "ext-pdo": "*"
   }
 }

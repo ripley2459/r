@@ -1,7 +1,9 @@
 <?php
 
 /**
- * Procedural class which represent an object that can be inserted inside a database.
+ * Procedural abstract class representing an object that can be stored in a database.
+ * This class provides a procedural approach to interact with a database, including methods for retrieving, inserting, updating, and deleting data. Subclasses must implement specific methods to define the table name, columns, and other database-related details.
+ * @property int $id The unique identifier for the data.
  */
 abstract class AData
 {
