@@ -10,4 +10,5 @@ composer require --dev phpunit/phpunit ^10
 
 ```bash
 vendor/bin/phpunit test/RTests.php
+vendor/bin/phpunit test/RDBTests.php
 ```

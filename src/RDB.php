@@ -1,46 +1,39 @@
 <?php
 
 /**
- * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
+ * Wrapper class that can be used to handle simple MySQL queries.
+ * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees.
+ * You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 3
+ * @version 4
  */
 class RDB
 {
     const COMPARE = ['=', '!=', '<', '<>', '>', '<=', '>='];
-    const JOIN = ['INNER', 'LEFT', 'RIGHT', 'LEFT OUTER', 'RIGHT OUTER'];
-    const ORDER_BY = ['ASC', 'DESC'/*, 'RAND()'*/]; // TODO Special case RAND()
-    const AND_OR = ['AND', 'OR'];
-    const LOGIC = ['ALL', 'AND', 'ANY', 'BETWEEN', 'EXISTS', 'IN', 'LIKE', 'NOT', 'OR', 'SOME'];
+    const ORDER_BY = ['ASC', 'DESC', 'RAND()'];
     private static array $_args;
     private static PDO $_pdo;
     private string $_operation;
     private string $_table;
     private array $_columns;
-    private int $_limit = 0;
-    private int $_offset = 0;
-    private string $_orderBy = R::EMPTY;
+    private string $_statement = R::EMPTY;
+    private array $_data;
     private array $_where = array();
-    private int $_whereAmount = 0;
-    private array $_joins = array();
-    private mixed $_data;
-    private ?PDOStatement $_request = null;
-    private ?string $_as;
+    private array $_join = array();
+    private array $_union = array();
+    private int $_wherePointer = 0;
+    private string $_orderBy;
+    private ?int $_limit;
+    private ?int $_offset;
+    private int $_whereIndex = 0;
 
-    private function __construct(string $operation, string $table, array $columns, mixed $data)
+    private function __construct(string $operation, string $table, array $columns, array $data)
     {
         $this->_operation = $operation;
-        $this->_table = self::$_args['prefix'] . $table;
-
-        foreach ($columns as $column) {
-            if (!str_contains($column, '.')) {
-                $column = $this->_table . '.' . $column;
-                $this->_columns[] = $column;
-            }
-        }
-
+        $this->_table = $table;
         $this->_data = $data;
+        $this->_columns = $columns;
     }
 
     /**
@@ -51,18 +44,18 @@ class RDB
      * - 'charset': The character encoding used for the connection.
      * - 'user': The username for the database connection.
      * - 'password': The password for the database user.
-     * - 'prefix': A database table prefix (if applicable).
+     * - 'prefix': Tables prefix, put an empty string if not used.
      * - 'sqlPath': The path to SQL files (used for database setup and scripts execution).
-     * If the connection is successfully established, it returns an instance of the RDB class, which can be used to interact with the database.
+     * If the connection is successfully established, it returns an instance of the RDB class,
+     * which can be used to interact with the database.
      * If any errors occur during the connection attempt, it throws a PDOException with an error message.
      * @param array $args An associative array containing the necessary configuration parameters.
      * @throws PDOException If a connection error occurs, a PDOException is thrown.
      */
     public static function start(array $args): void
     {
-        R::checkArgument(R::allKeysExist($args, ['host', 'dbname', 'charset', 'user', 'password', 'prefix', 'sqlPath']));
+        R::checkArgument(R::allKeysExist($args, ['host', 'dbname', 'charset', 'user', 'password', /*'prefix',*/ 'sqlPath']));
         self::$_args = $args;
-
         try {
             $dsn = 'mysql:host=' . self::$_args['host'] . ';dbname=' . self::$_args['dbname'] . ';charset=' . self::$_args['charset'];
             $dsn_options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => true];
@@ -73,298 +66,419 @@ class RDB
     }
 
     /**
-     * Inserts data into a database table.
-     * @param string $table The name of the database table to insert data into.
+     * Inserts data into a table.
+     * @param string $table The name of the table to insert data into.
      * @param array $columns An array of column names to specify the columns in the database table. In the shape of ['name', 'gender', 'age'].
      * @param array $data A 2D array containing the data to be inserted into the table. In the shape of [['john', 'marie', 'isac'], ['male', 'female', 'male'], ['31', '27', '45']].
-     * @return bool Returns true if the insertion is successful; otherwise, returns false.
-     * @throws PDOException If any errors occur during the insertion process, they are caught and rethrown.
+     * @return RDB - When executed, it will return an array of int representing the id(s) of the inserted elements.
      */
-    public static function insert(string $table, array $columns, array $data): bool
+    public static function insert(string $table, array $columns, array $data): RDB
     {
         R::checkArgument(!R::blank($columns) && !R::blank($data) && count($columns) == count($data));
-        $amount = R::isSquareArray($data);
-        R::checkArgument($amount != false);
-
-        $table = self::$_args['prefix'] . $table;
-        $s = 'INSERT INTO ' . $table . ' (' . R::concat(', ', $columns) . ') VALUES ';
-        R::prefix(':', $columns);
-        $s .= '(' . R::concat(', ', $columns) . ')';
-        $r = self::$_pdo->prepare($s);
-
-        try {
-            for ($j = 0; $j < $amount; $j++) {
-                for ($i = 0; $i < count($columns); $i++) {
-                    $r->bindValue($columns[$i], $data[$i][$j]);
-                }
-
-                $r->execute();
-            }
-
-            return $r->closeCursor();
-        } catch (PDOException $e) {
-            throw new PDOException($e->getMessage());
-        }
+        return new RDB('insert', $table, $columns, $data);
     }
 
     /**
-     * @return PDOStatement The ready to fetch data.
+     * Updates data of a table.
+     * @param string $table The name of the table to update data from.
+     * @param array $columns The array of column names that will be affected. In the shape of ['name', 'gender', 'age'].
+     * @param array $data A 2D array containing the data to be used for the update process. In the shape of [['john', 'marie', 'isac'], ['male', 'female', 'male'], ['31', '27', '45']].
+     * @return RDB - When executed, it will return a boolean. True means that the targeted table and rows were updated successfully.
      */
-    public function execute(): PDOStatement
-    {
-        R::checkArgument(isset(self::$_pdo));
-        if ($this->_request == null) $this->_request = self::$_pdo->prepare($this->getStatement());
-        $this->bindValues($this->_request);
-        R::checkArgument($this->_request->execute());
-        return $this->_request;
-    }
-
-    private function getStatement(): string
-    {
-        if ($this->_operation == 'UPDATE') { // Special case // TODO Separate each operation in different classes
-            $statement = R::concat(R::SPACE, $this->_operation, $this->_table);
-
-            $vars = R::EMPTY;
-            for ($i = 0; $i < count($this->_columns); $i++) {
-                R::append($vars, ', ', $this->_columns[$i] . ' = :' . $this->_columns[$i]);
-            }
-
-            $statement = R::concat(R::SPACE, $statement, 'SET', $vars);
-            $this->bindWhere($statement);
-        } else {
-            $statement = R::concat(R::SPACE, $this->_operation, implode(', ', $this->_columns), 'FROM', $this->_table);
-
-            if ($this->_operation == 'SELECT') {
-                foreach ($this->_joins as $join) {
-                    R::append($statement, R::SPACE, $join);
-                }
-            }
-
-            $this->bindWhere($statement);
-            if (!R::blank($this->_orderBy)) R::append($statement, R::SPACE, 'ORDER BY', $this->_orderBy);
-            if ($this->_limit > 0 && $this->_offset > 0) {
-                R::append($statement, R::SPACE, 'LIMIT', ':limit', ',', ':offset');
-            } else if ($this->_limit > 0) R::append($statement, R::SPACE, 'LIMIT', ':limit');
-        }
-
-        return $statement;
-    }
-
-    /**
-     * @param string $statement
-     * @return void
-     */
-    public function bindWhere(string &$statement): void
-    {
-        $s = function ($where): string {
-            $stmt = $where->getStatement();
-            if ($where->isChained()) $stmt = '(' . $stmt . ')';
-            return $stmt;
-        };
-
-        if (!empty($this->_where)) {
-            $statement .= ' WHERE ';
-            $statement .= $s($this->_where[0]);
-            for ($i = 1; $i < count($this->_where); $i++) {
-                R::append($statement, R::SPACE, 'AND', $s($this->_where[$i]));
-            }
-        }
-    }
-
-    private function bindValues(PDOStatement &$request): void
-    {
-        if ($this->_operation == 'UPDATE') {
-            for ($i = 0; $i < count($this->_columns); $i++) {
-                $request->bindValue(':' . $this->_columns[$i], $this->_data[$i]);
-            }
-        }
-
-        foreach ($this->_where as $where) {
-            $where->bindValues($request);
-        }
-
-        if ($this->_limit > 0 && $this->_offset > 0) {
-            $request->bindValue(':limit', $this->_offset * $this->_limit - $this->_limit, PDO::PARAM_INT);
-            $request->bindValue(':offset', $this->_limit, PDO::PARAM_INT);
-        } else if ($this->_limit > 0) $request->bindValue(':limit', $this->_limit, PDO::PARAM_INT);
-    }
-
     public static function update(string $table, array $columns, array $data): RDB
     {
         R::checkArgument(!R::blank($columns) && !R::blank($data) && count($columns) == count($data));
-        return new RDB('UPDATE', $table, $columns, $data);
+        return new RDB('update', $table, $columns, $data);
+    }
+
+    /**
+     * Selects data from a table.
+     * @param string $table The name of the table to delete data from.
+     * @return RDB - When executed, it will return a boolean. True means that the targeted data were removed successfully.
+     */
+    public static function select(string $table, string ...$columns): RDB
+    {
+        R::checkArgument(!R::blank($columns));
+        return new RDB('select', $table, $columns, []);
+    }
+
+    /**
+     * Delete data from a table.
+     * @param string $table The name of the table to delete data from.
+     * @return RDB - When executed, it will return a boolean. True means that the targeted data were removed successfully.
+     */
+    public static function delete(string $table): RDB
+    {
+        return new RDB('delete', $table, [], []);
+    }
+
+    /**
+     * Checks and creates the associated table if necessary.
+     * @param string $table The table to check the existence.
+     * @param array $structure An array representing the structure of the table, used to create the table.
+     * @return RDB - When executed, it will return a boolean. True means that a table with the provided name exists in the database of a table with the provided information have been successfully created.
+     */
+    public static function check(string $table, array $structure): RDB
+    {
+        return new RDB('check', $table, [], $structure);
     }
 
     /**
      * Drops a database table specified by the given table name.
      * @param string $table The name of the table to be dropped.
-     * @return bool True if the table was successfully dropped, false otherwise.
+     * @return RDB - When executed, it will return a boolean. True means the table was successfully deleted from the database.
      */
-    public static function drop(string $table): bool
+    public static function drop(string $table): RDB
     {
-        return self::command('DROP TABLE ' . self::$_args['prefix'] . $table)->closeCursor();
+        return new RDB('drop', $table, [], []);
     }
 
     /**
-     * Convenient way to run a custom query.
-     * @param string $query The query to prepare and then execute.
-     * @return PDOStatement
-     * @throws PDOException
+     * Truncate a database table specified by the given table name.
+     * @param string $table The name of the table to be truncated.
+     * @return RDB - When executed, it will return a boolean. True means the table was successfully deleted from the database.
      */
-    public static function command(string $query): PDOStatement
+    public static function truncate(string $table): RDB
     {
-        try {
-            $r = self::$_pdo->prepare($query);
-            $r->execute();
-            return $r;
-        } catch (PDOException $e) {
-            throw new PDOException($e->getMessage());
-        }
+        return new RDB('truncate', $table, [], []);
     }
 
     /**
-     * @param string $table
-     * @param string ...$columns
-     * @return RDB
+     * Determine the PDO parameter type for a given value.
+     * If the input type is not recognized, the default type returned is PDO::PARAM_STR.
+     * @param mixed $param The parameter for which to determine the PDO parameter type.
+     * @return int The PDO parameter type (PDO::PARAM_STR, PDO::PARAM_INT, or PDO::PARAM_BOOL).
      */
-    public static function select(string $table, string ...$columns): RDB
-    {
-        return new RDB('SELECT', $table, $columns, null);
-    }
-
-    public static function delete(string $table): RDB
-    {
-        return new RDB('DELETE', $table, [], null);
-    }
-
-    /**
-     * Checks and creates the associated table if necessary.
-     * @return bool True if the table exists or was created successfully.
-     */
-    public static function check(string $table, array $args): bool
-    {
-        if (self::show($table))
-            return true;
-
-        $a = R::EMPTY;
-        foreach ($args as $arg)
-            R::append($a, ', ', $arg);
-        $s = 'CREATE TABLE ' . self::$_args['prefix'] . $table . ' (' . $a . ')';
-        return RDB::command($s)->closeCursor();
-    }
-
-    /**
-     * Checks if a table exists in the database.
-     * @param string $table The name of the table to check for existence.
-     * @return bool Returns true if the table exists; otherwise, returns false.
-     */
-    public static function show(string $table): bool
-    {
-        $r = self::command('SHOW TABLES LIKE \'' . self::$_args['prefix'] . $table . '\'');
-        $p = $r->rowCount() > 0;
-        $r->closecursor();
-        return $p;
-    }
-
     public static function getType(mixed $param): int
     {
-        if (is_string($param)) return PDO::PARAM_STR;
-        if (is_int($param)) return PDO::PARAM_INT;
-        if (is_bool($param)) return PDO::PARAM_BOOL;
+        if (is_string($param))
+            return PDO::PARAM_STR;
+        if (is_int($param))
+            return PDO::PARAM_INT;
+        if (is_bool($param))
+            return PDO::PARAM_BOOL;
         return PDO::PARAM_STR;
+    }
+
+    /**
+     * @return PDO
+     */
+    public static function &getPdo(): PDO
+    {
+        return self::$_pdo;
+    }
+
+    public function innerJoin(string $table, string $on): RDB
+    {
+        $this->join_IMPL('INNER JOIN', $table, $on);
+        return $this;
+    }
+
+    private function join_IMPL(string $type, string $table, string $on): void
+    {
+        R::checkArgument($this->_operation == 'select');
+        $this->_join[] = R::concat(R::SPACE, $type, $table, 'ON', $on);
+    }
+
+    public function leftJoin(string $table, string $on): RDB
+    {
+        $this->join_IMPL('LEFT JOIN', $on, $table);
+        return $this;
+    }
+
+    public function rightJoin(string $table, string $on): RDB
+    {
+        $this->join_IMPL('RIGHT JOIN', $on, $table);
+        return $this;
+    }
+
+    public function fullJoin(string $table, string $on): RDB
+    {
+        $this->join_IMPL('FULL JOIN', $table, $on);
+        return $this;
+    }
+
+    public function or(): RDB
+    {
+        $this->_wherePointer++;
+        return $this;
+    }
+
+    public function where(string $column, string $comparator = R::EMPTY, mixed $value = null): RDB_Where|RDB
+    {
+        $c = new RDB_Where($this, $this->_whereIndex++, $this->_table, $column, $comparator, $value);
+        $this->_where[$this->_wherePointer][] = $c;
+        return R::blank($comparator) ? $c : $this;
     }
 
     public function orderBy(string $column, string $order): RDB
     {
         R::whitelist($order, self::ORDER_BY);
-        $this->_orderBy = $this->_table . '.' . $column . R::SPACE . $order;
+        $this->_orderBy = $column . R::SPACE . $order;
         return $this;
     }
 
-    public function limit(int $limit, int $offset = 0): RDB
+    public function limit(int $limit, int $offset = null): RDB
     {
         $this->_limit = $limit;
         $this->_offset = $offset;
         return $this;
     }
 
-    public function as(string $newName): RDB
+    public function union(RDB $sub): RDB
     {
-        $this->_as = $newName;
+        $this->union_IMPL('UNION', $sub);
         return $this;
     }
 
-    public function where(string $column, string $comparator = R::EMPTY, mixed $value = null): object
+    private function union_IMPL(string $type, RDB $sub): void
     {
-        return $this->whereIMP($column, $comparator, $value, null);
+        R::checkArgument($this->_operation == 'select');
+        $this->_union[] = [$type, $sub];
     }
 
-    private function whereIMP(string $column, string $comparator = R::EMPTY, mixed $value = null, string $operation = null): object
+    public function unionAll(RDB $sub): RDB
     {
-        $table = $this->_as ?? $this->_table;
-        $this->_as = null;
-        $c = new RDB_Where($this, $table, $column, $comparator, $value, $this->_whereAmount++);
-        if ($operation == null) $this->_where[] = $c;
-        else {
-            $last = $this->_where[array_key_last($this->_where)];
-            $last->chain($operation, $c);
+        $this->union_IMPL('UNION ALL', $sub);
+        return $this;
+    }
+
+    private function execute_SELECT(PDOStatement &$stmt, bool $ol = true): PDOStatement
+    {
+        $this->bindValues_SELECT($stmt, $ol);
+        $stmt->execute();
+        return $stmt;
+    }
+
+    public function bindValues_SELECT(PDOStatement &$stmt, bool $ol = true): void
+    {
+        if (!empty($this->_where)) {
+            for ($i = 0; $i < count($this->_where); $i++) {
+                foreach ($this->_where[$i] as $condition)
+                    if (is_array($condition))
+                        $condition[2]->bindValues($stmt);
+                    else $condition->bindValues($stmt);
+            }
         }
 
-        return R::blank($comparator) ? $c : $this;
-    }
+        foreach ($this->_union as $union)
+            $union[1]->bindValues(false);
 
-    public function or(string $column, string $comparator = R::EMPTY, mixed $value = null): object
-    {
-        return $this->whereIMP($column, $comparator, $value, 'OR');
-    }
-
-    public function and(string $column, string $comparator = R::EMPTY, mixed $value = null): object
-    {
-        return $this->whereIMP($column, $comparator, $value, 'AND');
+        if ($ol) {
+            if (isset($this->_limit) && isset($this->_offset)) {
+                $stmt->bindValue(':limit', $this->_limit, PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $this->_offset, PDO::PARAM_INT);
+            } else if (isset($this->_limit))
+                $stmt->bindValue(':limit', $this->_limit, PDO::PARAM_INT);
+        }
     }
 
     /**
-     * @return array
+     * Prepares and executes the request.
+     * @return PDOStatement|bool|array The return type depends on the request.
      */
-    public function &getWhere(): array
+    public function execute(): PDOStatement|bool|array
     {
-        return $this->_where;
+        return $this->execute_IMPL(true);
     }
 
-    public function innerJoin(string $on, string $table, string $column): RDB
+    /**
+     * @param bool $ol Used in a recursive context. You shouldn't have to manually set it to false unless you want to remove the ORDER BY and LIMIT clauses from your request entirely.
+     * @return PDOStatement|bool|array
+     */
+    private function execute_IMPL(bool $ol = true): PDOStatement|bool|array
     {
-        $this->join('INNER', $on, $table, $column);
-        return $this;
+        if (R::blank($this->_statement))
+            $this->_statement = $this->getStatement();
+        $stmt = self::$_pdo->prepare($this->_statement);
+
+        return match ($this->_operation) {
+            'delete' => $this->execute_DELETE($stmt),
+            'select' => $this->execute_SELECT($stmt, $ol),
+            'update' => $this->execute_UPDATE($stmt),
+            'insert' => $this->execute_INSERT($stmt),
+            'show' => $this->execute_SHOW($stmt),
+            'check' => $this->execute_CHECK($stmt),
+            default => $stmt->execute() && $stmt->closeCursor(),
+        };
     }
 
-    private function join(string $join, string $on, string $table, string $column): void
+    /**
+     * @return string The request with all markers, ready to be prepared.
+     */
+    public function getStatement(): string
     {
-        R::checkArgument($this->_operation == 'SELECT');
-        $as = $this->_as != null ? ' AS ' . $this->_as : R::EMPTY;
-        $this->_as = null;
-        $this->_joins[] = R::concat(R::SPACE, $join, 'JOIN', self::$_args['prefix'] . $table . $as, 'ON', $this->_table . '.' . $on, '=', self::$_args['prefix'] . $table . '.' . $column);
+        return $this->getStatement_IMPL(true);
     }
 
-    public function leftJoin(string $on, string $table, string $column): RDB
+    /**
+     * @param bool $ol Used in a recursive context. You shouldn't have to manually set it to false unless you want to remove the ORDER BY and LIMIT clauses from your request entirely.
+     * @return string
+     * @see getStatement()
+     */
+    private function getStatement_IMPL(bool $ol = true): string
     {
-        $this->join('LEFT', $on, $table, $column);
-        return $this;
+        if (!R::blank($this->_statement))
+            return $this->_statement;
+
+        return match ($this->_operation) {
+            'truncate' => 'TRUNCATE TABLE ' . $this->_table,
+            'drop' => 'DROP TABLE ' . $this->_table,
+            'show' => 'SHOW TABLES LIKE \'' . $this->_table . '\'',
+            'check' => 'CREATE TABLE ' . $this->_table . ' (' . implode(', ', $this->_data) . ')',
+            'delete' => $this->getStatement_DELETE(),
+            'select' => $this->getStatement_SELECT($ol),
+            'update' => $this->getStatement_UPDATE(),
+            'insert' => $this->getStatement_INSERT(),
+            default => R::EMPTY,
+        };
     }
 
-    public function rightJoin(string $on, string $table, string $column): RDB
+    private function getStatement_DELETE(): string
     {
-        $this->join('RIGHT', $on, $table, $column);
-        return $this;
+        $stmt = R::concat(R::SPACE, 'DELETE', 'FROM', $this->_table);
+        R::append($stmt, R::SPACE, $this->getStatement_WHERE());
+        return $stmt;
     }
 
-    public function fullJoin(string $on, string $table, string $column): RDB
+    private function getStatement_WHERE(): string
     {
-        $this->join('FULL OUTER', $on, $table, $column);
-        return $this;
+        $stmt = R::EMPTY;
+
+        if (!empty($this->_where)) {
+            $stmt = 'WHERE';
+            for ($i = 0; $i < count($this->_where); $i++) {
+                $conditions = R::EMPTY;
+                foreach ($this->_where[$i] as $condition)
+                    R::append($conditions, ' AND ', $condition->getStatement());
+                if (count($this->_where[$i]) > 1)
+                    R::append($stmt, R::EMPTY, ' (', $conditions, ')');
+                else R::append($stmt, R::SPACE, $conditions);
+
+                if (isset($this->_where[$i + 1]))
+                    R::append($stmt, R::SPACE, 'OR');
+            }
+        }
+
+        return $stmt;
     }
 
-    public static function &getPDO(): PDO
+    private function getStatement_SELECT(bool $ol = true): string
     {
-        return self::$_pdo;
+        $stmt = R::concat(R::SPACE, 'SELECT', implode(', ', $this->_columns), 'FROM', $this->_table);
+
+        foreach ($this->_join as $join)
+            R::append($stmt, R::SPACE, $join);
+
+        R::append($stmt, R::SPACE, $this->getStatement_WHERE());
+
+        foreach ($this->_union as $union)
+            R::append($stmt, R::SPACE, $union[0] . R::SPACE . $union[1]->getStatement_IMPL(false));
+
+        if ($ol) {
+            if (isset($this->_orderBy) && !R::blank($this->_orderBy))
+                R::append($stmt, R::SPACE, 'ORDER BY', $this->_orderBy);
+            if (isset($this->_limit) && isset($this->_offset))
+                R::append($stmt, R::SPACE, 'LIMIT', ':limit', ',', ':offset');
+            else if (isset($this->_limit))
+                R::append($stmt, R::SPACE, 'LIMIT', ':limit');
+        }
+
+        return $stmt;
+    }
+
+    private function getStatement_UPDATE(): string
+    {
+        $vars = R::EMPTY;
+        for ($i = 0; $i < count($this->_columns); $i++)
+            R::append($vars, ', ', $this->_columns[$i] . ' = :' . $this->_columns[$i]);
+        $stmt = R::concat(R::SPACE, R::SPACE, 'UPDATE', $this->_table, 'SET', $vars);
+
+        R::append($stmt, R::SPACE, $this->getStatement_WHERE());
+
+        return $stmt;
+    }
+
+    private function getStatement_INSERT(): string
+    {
+        $columns = $this->_columns;
+        $s = 'INSERT INTO ' . $this->_table . ' (' . R::concat(', ', $columns) . ') VALUES ';
+        R::prefix(':', $columns);
+        return $s . '(' . R::concat(', ', $columns) . ')';
+    }
+
+    private function execute_DELETE(PDOStatement &$stmt): bool
+    {
+        if (!empty($this->_where)) {
+            for ($i = 0; $i < count($this->_where); $i++) {
+                foreach ($this->_where[$i] as $condition)
+                    if (is_array($condition))
+                        $condition[2]->bindValues($stmt);
+                    else $condition->bindValues($stmt);
+            }
+        }
+
+        return $stmt->execute() && $stmt->closeCursor();;
+    }
+
+    private function execute_UPDATE(PDOStatement &$stmt): bool // TODO Multiple update!
+    {
+        for ($i = 0; $i < count($this->_columns); $i++)
+            $stmt->bindValue(':' . $this->_columns[$i], $this->_data[$i], PDO::PARAM_STR);
+
+        if (!empty($this->_where)) {
+            for ($i = 0; $i < count($this->_where); $i++) {
+                foreach ($this->_where[$i] as $condition)
+                    if (is_array($condition))
+                        $condition[2]->bindValues($stmt);
+                    else $condition->bindValues($stmt);
+            }
+        }
+
+        return $stmt->execute() && $stmt->closeCursor();
+    }
+
+    private function execute_INSERT(PDOStatement $stmt): array
+    {
+        $amount = R::isSquareArray($this->_data);
+        R::checkArgument($amount != false);
+        $columns = $this->_columns;
+        R::prefix(':', $columns);
+
+        $inserted = array();
+        for ($j = 0; $j < $amount; $j++) {
+            for ($i = 0; $i < count($columns); $i++)
+                $stmt->bindValue($columns[$i], $this->_data[$i][$j]);
+            $stmt->execute();
+            $inserted[] = self::$_pdo->lastInsertId();
+        }
+
+        $stmt->closeCursor();
+        return $inserted;
+    }
+
+    private function execute_SHOW(PDOStatement $stmt): bool
+    {
+        $stmt->execute();
+        $count = $stmt->rowCount() > 0;
+        $stmt->closeCursor();
+        return $count;
+    }
+
+    private function execute_CHECK(PDOStatement $stmt): bool
+    {
+        if (self::show($this->_table)->execute())
+            return true;
+        return $stmt->execute() && $stmt->closeCursor();
+    }
+
+    /**
+     * Checks if a table exists in the database.
+     * @param string $table The name of the table to check for existence.
+     * @return RDB - When executed, it will return a boolean. True means that a table with the provided name exists in the database.
+     */
+    public static function show(string $table): RDB
+    {
+        return new RDB('show', $table, [], []);
     }
 }

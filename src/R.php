@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 13
+ * @version 14
  */
 class R
 {
@@ -24,7 +24,7 @@ class R
      * Primitive event system.
      * @var array The array that contains every event and their functions.
      */
-    private static array $_events;
+    private static array $_events = array();
 
     /**
      * Check if provided parameters are presents in the GET or in the POST superglobal.
@@ -35,7 +35,8 @@ class R
     public static function require(string...$parameters): void
     {
         foreach ($parameters as $arg) {
-            if (!(isset($_GET[$arg]) || isset($_POST[$arg]))) throw new InvalidArgumentException('Missing argument: ' . $arg . '!');
+            if (!(isset($_GET[$arg]) || isset($_POST[$arg])))
+                throw new InvalidArgumentException('Missing argument: ' . $arg . '!');
         }
     }
 
@@ -50,8 +51,10 @@ class R
      */
     public static function whitelist(mixed $value, array $allowed, mixed $default = null): mixed
     {
-        if (in_array($value, $allowed, true)) return $value;
-        if (isset($default)) return $default;
+        if (in_array($value, $allowed, true))
+            return $value;
+        if (isset($default))
+            return $default;
         throw new InvalidArgumentException('This value is no allowed here!');
     }
 
@@ -77,9 +80,8 @@ class R
         $files = self::rScan($path);
         foreach ($files as $file) {
             if (is_dir($path . $file)) {
-                foreach (self::recursiveScan($path . $file . '/') as $subFile) {
+                foreach (self::recursiveScan($path . $file . '/') as $subFile)
                     $r[] = $subFile;
-                }
             } else $r[] = $path . $file;
         }
 
@@ -111,7 +113,8 @@ class R
     {
         $parseIfNecessary = function (mixed &$value): void {
             if (is_string($value)) {
-                if (str_contains($value, 'noparse:')) $value = str_replace('noparse:', R::EMPTY, $value);
+                if (str_contains($value, 'noparse:'))
+                    $value = str_replace('noparse:', R::EMPTY, $value);
                 else self::parse($value);
             }
         };
@@ -164,12 +167,12 @@ class R
     public static function checkArgument(bool $arg, string $message = self::EMPTY, bool $noException = false): void
     {
         $message = self::blank($message) ? 'Provided argument is not valid!' : $message;
-        if ($noException) {
-            if (!$arg) {
+        if (!$arg) {
+            if ($noException) {
                 echo $message;
                 die;
-            }
-        } else if (!$arg) throw new InvalidArgumentException($message);
+            } else throw new InvalidArgumentException($message);
+        }
     }
 
     /**
@@ -186,10 +189,14 @@ class R
      */
     public static function blank(mixed &$value): bool
     {
-        if (is_null($value)) return true;
-        if (is_string($value)) return trim($value) === self::EMPTY;
-        if (is_numeric($value) || is_bool($value)) return false;
-        if ($value instanceof Countable) return count($value) === 0;
+        if (is_null($value))
+            return true;
+        if (is_string($value))
+            return trim($value) === self::EMPTY;
+        if (is_numeric($value) || is_bool($value))
+            return false;
+        if ($value instanceof Countable)
+            return count($value) === 0;
         return empty($value);
     }
 
@@ -208,11 +215,15 @@ class R
         $argument = R::EMPTY;
         $message = R::blank($message) ? 'The required parameter is not provided and no default value is given!' : $message;
 
-        if (isset($_GET[$parameter])) $argument = $_GET[$parameter];
-        else if (isset($_POST[$parameter])) $argument = $_POST[$parameter];
+        if (isset($_GET[$parameter]))
+            $argument = $_GET[$parameter];
+        else if (isset($_POST[$parameter]))
+            $argument = $_POST[$parameter];
 
-        if (!R::blank($argument)) return $argument;
-        if (isset($default)) return $default;
+        if (!R::blank($argument))
+            return $argument;
+        if (isset($default))
+            return $default;
         if ($noException) {
             echo $message;
             die;
@@ -245,7 +256,8 @@ class R
      */
     public static function prefix(string $prefix, string|array &$input): void
     {
-        if (is_string($input)) $input = $prefix . $input;
+        if (is_string($input))
+            $input = $prefix . $input;
         if (is_array($input))
             array_walk($input, function (&$element) use ($prefix) {
                 self::checkArgument(self::canBeString($element), 'The prefix function works only with strings!');
@@ -300,6 +312,8 @@ class R
     public static function bind(string $name, callable $function): void
     {
         self::checkArgument(!self::blank($name) && is_callable($function), 'Invalid event binding!');
+        if (!isset(self::$_events[$name]))
+            self::$_events[$name] = array();
         self::$_events[$name][] = $function;
     }
 
@@ -328,21 +342,22 @@ class R
      */
     public static function call(string $name): void
     {
-        self::checkArgument(!self::blank($name) && is_callable(self::$_events[$name]), 'Invalid event name!');
+        self::checkArgument(!self::blank($name) && is_array(self::$_events[$name]), 'Invalid event name!');
         $args = func_get_args();
         array_shift($args);
-        self::checkArgument(call_user_func_array(self::$_events[$name], $args) !== false, 'Event function failed!');
+        foreach (self::$_events[$name] as $callback)
+            self::checkArgument(call_user_func_array($callback, $args) !== false, 'Event function failed!');
     }
 
     /**
-     * Generates the next available path for a given destination path, avoiding overwrites.
+     * Generates the next available path for a given destination path, avoiding overwriting.
      * @param string $destination The destination path where the file should be saved. Something like 'folder/fileName.ext'.
      * @param int $iteration (Optional) The iteration number to resolve potential naming conflicts.
      * @return string The next available filename to prevent overwriting existing files. Can create something like 'folder/fileName_2.ext'.
      */
     public static function nextName(string $destination, int $iteration = 0): string
     {
-        $infos = self::pathInfos($destination);
+        $infos = self::pathInfo($destination);
         $tryName = $iteration == 0 ? $destination : self::concat(self::EMPTY, $infos['dirname'], '/', $infos['filename'], '_', $iteration, '.', $infos['extension']);
         return file_exists($tryName) ? self::nextName($destination, $iteration + 1) : $tryName;
     }
@@ -350,11 +365,18 @@ class R
     /**
      * Convenient method to use pathinfo($path) and prevents unset values.
      * Extracts information from a file path and returns it as an associative array.
+     * ```
+     * $info = R::pathInfo('/www/htdocs/inc/lib.inc.php');   $info = R::pathInfo('/www/htdocs/inc/no_extension');
+     * $info['dirname'] = '/www/htdocs/inc';                 $info['dirname'] = '/www/htdocs/inc';
+     * $info['basename'] = 'lib.inc.php';                    $info['basename'] = 'lib.inc.php';
+     * $info['extension'] = 'php';                           $info['extension'] = '';
+     * $info['filename'] = 'lib.inc';                        $info['filename'] = 'no_extension';
+     * ```
      * @param string $path The file path to extract information from.
      * @return array An associative array containing information about the file path, including 'dirname', 'basename', 'extension', and 'filename'.
      * @see pathinfo()
      */
-    public static function pathInfos(string $path): array
+    public static function pathInfo(string $path): array
     {
         $infos = pathinfo($path);
         $infos['dirname'] = isset($infos['dirname']) && $infos['dirname'] != '.' ? $infos['dirname'] : self::EMPTY;
@@ -377,9 +399,11 @@ class R
 
         foreach ($strings as $value) {
             self::checkArgument(self::canBeString($value) || is_array($value));
-            if (self::canBeString($value)) self::append($main, $separator, $value);
+            if (self::canBeString($value))
+                self::append($main, $separator, $value);
             else if (is_array($value)) {
-                if (!self::blank($main)) $main .= $separator;
+                if (!self::blank($main))
+                    $main .= $separator;
                 $main .= self::concat($separator, ...$value);
             }
         }
@@ -398,7 +422,9 @@ class R
      */
     public static function filterArray(array $array): array
     {
-        return array_filter($array, function (mixed $string) { return !R::blank($string); });
+        return array_filter($array, function (mixed $string) {
+            return !R::blank($string);
+        });
     }
 
     /**
@@ -447,7 +473,8 @@ class R
 
         if (!isset($newHeight)) {
             $ratio = $width / $height;
-            if ($width > $height) $newHeight = floor($newWidth / $ratio);
+            if ($width > $height)
+                $newHeight = floor($newWidth / $ratio);
             else {
                 $newHeight = $newWidth;
                 $newWidth = floor($newWidth * $ratio);
@@ -496,11 +523,12 @@ class R
     public static function suffix(string $suffix, string|array &$input): void
     {
         $buildValue = function ($suffix, &$input): void {
-            $infos = R::pathInfos($input);
+            $infos = R::pathInfo($input);
             $input = $infos['dirname'] . ($infos['dirname'] == R::EMPTY ? R::EMPTY : '/') . $infos['filename'] . $suffix . ($infos['extension'] == R::EMPTY ? R::EMPTY : '.' . $infos['extension']);
         };
 
-        if (is_string($input)) $buildValue($suffix, $input);
+        if (is_string($input))
+            $buildValue($suffix, $input);
 
         if (is_array($input))
             array_walk($input, function (&$element) use ($suffix, $buildValue) {
@@ -519,7 +547,8 @@ class R
     public static function allKeysExist(array $array, array $keys): bool
     {
         foreach ($keys as $key) {
-            if (!array_key_exists($key, $array)) return false;
+            if (!array_key_exists($key, $array))
+                return false;
         }
 
         return true;
@@ -536,15 +565,140 @@ class R
 
         $amount = count($array[0]);
         foreach ($array as $column) {
-            if ($amount != count($column)) return false;
+            if ($amount != count($column))
+                return false;
         }
 
         return $amount;
     }
 
-    public static function replaceFirst($search, $replace, $subject): string
+    /**
+     * Replace the first occurrence of a specified search string with a replacement in the given subject string.
+     * @param string $search The string to search for.
+     * @param string $replace The string to replace the first occurrence of the search string with.
+     * @param string $subject The original string in which to perform the replacement.
+     * @return string The modified string with the first occurrence of the search string replaced.
+     */
+    public static function replaceFirst(string $search, string $replace, string $subject): string
     {
         $search = '/' . preg_quote($search, '/') . '/';
         return preg_replace($search, $replace, $subject, 1);
+    }
+
+    /**
+     * Function to swap the values of two variables.
+     * This function takes two variables by reference and swaps their values.
+     * If the two variables are equal, no action is taken.
+     * @param mixed &$left The first variable to be swapped.
+     * @param mixed &$right The second variable to be swapped.
+     * @return void
+     */
+    public static function swap(mixed &$left, mixed &$right): void
+    {
+        if ($left === $right)
+            return;
+        $bucket = $left;
+        $left = $right;
+        $right = $bucket;
+    }
+
+    /**
+     *  This PHP code "opens a drawer" whose have methods to manipulate nested arrays in a fluent manner.
+     *  The 'Drawer' has the following methods:
+     *  - add(mixed $element): Adds an element to the current level of the nested array and returns the Drawer object.
+     *  - open(): Creates and returns a new Drawer object for nesting and adds it to the current level of the nested array.
+     *  - close(): Closes the current level of nesting and returns either the parent Drawer object or the final nested array.
+     *  - get(): Returns the nested array represented by the Drawer object.
+     *  The class uses a private nested class to implement the fluent interface for creating nested arrays.
+     *
+     *  Example Usage:
+     *  ```
+     *  $drawer = Drawer::openDrawer();
+     *  $nestedArray = $drawer
+     *      ->add("Element 1")
+     *      ->open()
+     *          ->add("Element 2")
+     *          ->add("Element 3")
+     *      ->close()
+     *      ->add("Element 4")
+     *      ->get();
+     *  ```
+     *
+     *  The resulting $nestedArray will be an array with the following structure:
+     *  ```
+     *  [
+     *      "Element 1",
+     *      [
+     *          "Element 2",
+     *          "Element 3",
+     *      ],
+     *      "Element 4",
+     *  ]
+     * ```
+     */
+    public static function openDrawer(): object
+    {
+        return new class (null) {
+            private ?object $_parent;
+            private array $_stack;
+
+            public function __construct(?object $parent)
+            {
+                $this->_parent = $parent;
+                $this->_stack = [];
+            }
+
+            public function add(mixed $element): object
+            {
+                $this->_stack[] = $element;
+                return $this;
+            }
+
+            public function open(): object
+            {
+                $nestedArray = new self($this);
+                $this->_stack[] = $nestedArray;
+                return $nestedArray;
+            }
+
+            public function close(): object|array
+            {
+                return $this->_parent ?? $this->get();
+            }
+
+            public function get(): array
+            {
+                if (isset($this->_parent))
+                    $array = $this->_parent->get();
+                else $array = $this->get_IMPL($this->_stack);
+                return $array;
+            }
+
+            private function get_IMPL(array $values): array
+            {
+                $array = [];
+                foreach ($values as $element) {
+                    if ($element instanceof self)
+                        $array[] = $element->get_IMPL($element->_stack);
+                    else $array[] = $element;
+                }
+
+                return $array;
+            }
+        };
+    }
+
+    /**
+     * Takes a multidimensional array and flattens it to a one-dimensional array.
+     * @param array $array The input multidimensional array to be flattened.
+     * @return array The flattened one-dimensional array.
+     */
+    public static function flattenArray(array $array): array
+    {
+        $array = [];
+        array_walk_recursive($array, function ($a) use (&$array) {
+            $array[] = $a;
+        });
+        return $array;
     }
 }
