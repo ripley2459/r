@@ -58,13 +58,49 @@ class RTests extends TestCase
         $this->assertSame(__DIR__ . '/file_2.txt', $nameA);
     }
 
+    public function test_prefixAndSuffix()
+    {
+        $dataA = ['valA', 'valB', 'valC'];
+        R::prefix('prefix_', $dataA);
+
+        $this->assertSame(['prefix_valA', 'prefix_valB', 'prefix_valC'], $dataA);
+
+        $dataB = ['valA', 'valB', 'valC'];
+        R::suffix('_suffix', $dataB);
+
+        $this->assertSame(['valA_suffix', 'valB_suffix', 'valC_suffix'], $dataB);
+    }
+
+    public function test_append()
+    {
+        $main = 'main';
+        R::append($main, '.', 'string1', 'string2', 'string3');
+
+        $this->assertSame('main.string1.string2.string3', $main);
+    }
+
+    public function test_concat()
+    {
+        $main = R::concat('@', 'string1', 'string2', ['string3', 'string4'], 111, [222, 'string5']);
+
+        $this->assertSame('string1@string2@string3@string4@111@222@string5', $main);
+
+        $main = R::concat('@', R::SPACE, R::EMPTY, [R::SPACE, R::EMPTY]);
+
+        $this->assertSame(R::EMPTY, $main);
+    }
+
     public function test_event()
     {
         R::unbind('execute');
 
         $a = 0;
-        $calculate = function () use (&$a) { $a = 1 + 1; };
-        $echo = function () { echo 'executed!'; };
+        $calculate = function () use (&$a) {
+            $a = 1 + 1;
+        };
+        $echo = function () {
+            echo 'executed!';
+        };
 
         R::bind('execute', $calculate);
         R::bind('execute', $echo);
@@ -80,8 +116,12 @@ class RTests extends TestCase
 
         $a = 2;
         $b = 'C';
-        $calculate = function ($c) use (&$a) { $a = $c + $a; };
-        $concat = function ($c) use (&$b) { $b = $b . $c; };
+        $calculate = function ($c) use (&$a) {
+            $a = $c + $a;
+        };
+        $concat = function ($c) use (&$b) {
+            $b = $b . $c;
+        };
 
         R::bind('execute', $calculate);
         R::bind('execute', $concat);

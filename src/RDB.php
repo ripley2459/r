@@ -214,7 +214,7 @@ class RDB
     public function orderBy(string $column, string $order): RDB
     {
         R::whitelist($order, self::ORDER_BY);
-        $this->_orderBy = $column == 'RAND()' ? $column : $column . R::SPACE . $order;
+        $this->_orderBy = $order == 'RAND()' ? 'RAND()' : $column . R::SPACE . $order;
         return $this;
     }
 

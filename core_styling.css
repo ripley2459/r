@@ -479,15 +479,15 @@ tr:hover {
 }
 
 /* ==================================================
- * Grid
+ * Masonry
  */
 
-.grid {
+.masonry {
     column-count: 4;
     column-gap: 15px;
 }
 
-.grid > * {
+.masonry > * {
     width: 100%;
     position: relative;
     break-inside: avoid-column;
@@ -495,8 +495,12 @@ tr:hover {
     display: block;
 }
 
-.grid > *:last-child {
-    margin-bottom: 0;
+/**
+ * 1. In case of everything the same size, keeps the parent's margin size.
+ */
+
+.masonry > *:last-child {
+    margin-bottom: 0; /* 1 */
 }
 
 /* ==================================================
