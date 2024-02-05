@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 14
+ * @version 15
  */
 class R
 {
@@ -114,7 +114,7 @@ class R
         $parseIfNecessary = function (mixed &$value): void {
             if (is_string($value)) {
                 if (str_contains($value, 'noparse:'))
-                    $value = str_replace('noparse:', R::EMPTY, $value);
+                    $value = str_replace('noparse:', self::EMPTY, $value);
                 else self::parse($value);
             }
         };
@@ -158,20 +158,20 @@ class R
     }
 
     /**
-     * Convenience method to check if validity of a boolean argument.
-     * @param bool $arg The boolean argument to be validated.
+     * Convenience method to check the validity of a boolean argument.
+     * @param bool $argument The boolean argument to be validated.
      * @param string $message A custom error message to be used when the argument is invalid.
-     * @param bool $noException If set to true, exceptions will not be thrown, and the method will terminate the script with an echoed message instead.
+     * @param bool $throwException If set to true, exceptions will be thrown.
      * @throws InvalidArgumentException If $arg is false and $noException is false.
      */
-    public static function checkArgument(bool $arg, string $message = self::EMPTY, bool $noException = false): void
+    public static function checkArgument(bool $argument, string $message = self::EMPTY, bool $throwException = true): void
     {
         $message = self::blank($message) ? 'Provided argument is not valid!' : $message;
-        if (!$arg) {
-            if ($noException) {
-                echo $message;
-                die;
-            } else throw new InvalidArgumentException($message);
+        if (!$argument) {
+            if ($throwException)
+                throw new InvalidArgumentException($message);
+            echo $message;
+            die;
         }
     }
 
@@ -202,32 +202,37 @@ class R
 
     /**
      * Retrieves a specified parameter from either the GET or POST superglobals (in this order).
+     * If the parameter isn't found and no default is provided, will either throw an exception or display a message.
+     * - The type of the value found is not checked.
      * @param string $parameter The name of the parameter to retrieve.
      * @param mixed $default The default value to return if the parameter is not set.
-     * @param string $message Custom error message to display if the parameter is not set and no default is provided.
-     * @param bool $noException If true, echoes the error message and terminates script execution; otherwise, throws an exception.
-     * @return mixed The value of the specified parameter if set, default value if provided, or error handling based on $noException.
-     * @throws InvalidArgumentException If the parameter is not set, no default value is provided, and $noException is false.
-     * @see require()
+     * @param string $message The message to show, if it is empty, nothing is displayed.
+     * @param bool $throwException If true, throws an exception; otherwise echoes the error message and terminates script execution with die.
+     * @return mixed The value of the requested parameter, or the default value if provided.
+     * @throws InvalidArgumentException If the parameter is not provided, and no default value is given (only if $throwException is true).
      */
-    public static function getParameter(string $parameter, mixed $default = null, string $message = R::EMPTY, bool $noException = false): mixed
+    public static function getParameter(string $parameter, mixed $default = null, string $message = R::EMPTY, bool $throwException = true): mixed
     {
-        $argument = R::EMPTY;
-        $message = R::blank($message) ? 'The required parameter is not provided and no default value is given!' : $message;
+        $argument = self::EMPTY;
 
         if (isset($_GET[$parameter]))
             $argument = $_GET[$parameter];
         else if (isset($_POST[$parameter]))
             $argument = $_POST[$parameter];
 
-        if (!R::blank($argument))
+        if (!self::blank($argument))
             return $argument;
         if (isset($default))
             return $default;
-        if ($noException) {
+
+        if ($throwException) {
+            $message = self::blank($message) ? 'The required parameter is not provided and no default value is given!' : $message;
+            throw new InvalidArgumentException($message);
+        }
+
+        if (!self::blank($message))
             echo $message;
-            die;
-        } else throw new InvalidArgumentException($message);
+        die;
     }
 
     /**
@@ -423,7 +428,7 @@ class R
     public static function filterArray(array $array): array
     {
         return array_filter($array, function (mixed $string) {
-            return !R::blank($string);
+            return !self::blank($string);
         });
     }
 
@@ -441,7 +446,7 @@ class R
         $main = !self::blank($main) ? $main : self::EMPTY;
 
         if (count($strings) > 0) {
-            $main = !R::blank($main) ? $main . $separator . $strings[0] : $strings[0];
+            $main = !self::blank($main) ? $main . $separator . $strings[0] : $strings[0];
             for ($i = 1; $i < count($strings); $i++) {
                 if (!self::blank($strings[$i]))
                     $main .= $separator . $strings[$i];
@@ -460,13 +465,13 @@ class R
     public static function resize(string $path, int $newWidth, int $newHeight = null): void
     {
         $type = exif_imagetype($path);
-        R::checkArgument(in_array($type, [2/* JPEG */, 3/* PNG */, 6/* BMP */, 18/* WEBP */]));
+        self::checkArgument(in_array($type, [2/* JPEG */, 3/* PNG */, 6/* BMP */, 18/* WEBP */]));
 
         $imageData = file_get_contents($path);
-        R::checkArgument($imageData !== false);
+        self::checkArgument($imageData !== false);
 
         $image = imagecreatefromstring($imageData);
-        R::checkArgument($image instanceof GdImage);
+        self::checkArgument($image instanceof GdImage);
 
         $width = imagesx($image);
         $height = imagesy($image);
@@ -482,7 +487,7 @@ class R
         }
 
         $comp = imagecreatetruecolor($newWidth, $newHeight);
-        R::checkArgument($comp instanceof GdImage);
+        self::checkArgument($comp instanceof GdImage);
 
         if ($type == 1 || $type == 3) {
             imagecolortransparent($comp, imagecolorallocate($comp, 0, 0, 0));
@@ -492,7 +497,7 @@ class R
             }
         }
 
-        R::checkArgument(imagecopyresampled($comp, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height));
+        self::checkArgument(imagecopyresampled($comp, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height));
 
         $name = $path;
         $suffix = '_' . $newWidth . 'x' . ($newHeight ?? $newWidth);
@@ -523,8 +528,8 @@ class R
     public static function suffix(string $suffix, string|array &$input): void
     {
         $buildValue = function ($suffix, &$input): void {
-            $infos = R::pathInfo($input);
-            $input = $infos['dirname'] . ($infos['dirname'] == R::EMPTY ? R::EMPTY : '/') . $infos['filename'] . $suffix . ($infos['extension'] == R::EMPTY ? R::EMPTY : '.' . $infos['extension']);
+            $infos = self::pathInfo($input);
+            $input = $infos['dirname'] . ($infos['dirname'] == self::EMPTY ? self::EMPTY : '/') . $infos['filename'] . $suffix . ($infos['extension'] == self::EMPTY ? self::EMPTY : '.' . $infos['extension']);
         };
 
         if (is_string($input))
@@ -561,7 +566,7 @@ class R
      */
     public static function isSquareArray(array $array): int|bool
     {
-        R::checkArgument(!empty($array));
+        self::checkArgument(!empty($array));
 
         $amount = count($array[0]);
         foreach ($array as $column) {

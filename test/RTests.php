@@ -131,6 +131,52 @@ class RTests extends TestCase
         $this->assertSame('C2', $b);
     }
 
+    public function test_getParameter()
+    {
+        $_GET['get1'] = 'getValue1';
+        $_POST['post2'] = 100;
+
+        $value1 = R::getParameter('get1');
+        $value2 = R::getParameter('post2');
+        $value3 = R::getParameter('get3', 200);
+        $value4 = R::getParameter('get4', message: 'No param!', throwException: false);
+        $value5 = R::getParameter('get5');
+
+        $this->assertSame('getValue1', $value1);
+        $this->assertSame(100, $value2);
+        $this->assertSame(200, $value3);
+        $this->expectOutputString('No param!');
+        $this->expectException(InvalidArgumentException::class);
+
+        unset($_GET['get1']);
+        unset($_POST['get2']);
+    }
+
+    public function test_require()
+    {
+        $_GET['get1'] = 'getValue1';
+        $_POST['post2'] = 100;
+
+        R::require('get1');
+        R::require('post2');
+        R::require('get3');
+
+        $this->expectException(InvalidArgumentException::class);
+
+        unset($_GET['get1']);
+        unset($_POST['post2']);
+    }
+
+    public function test_checkArgument()
+    {
+        R::checkArgument(true);
+        R::checkArgument(false, message: 'OK!', throwException: false);
+        R::checkArgument(false);
+
+        $this->expectOutputString('OK!');
+        $this->expectException(InvalidArgumentException::class);
+    }
+
     /**
      * @inheritDoc
      */
