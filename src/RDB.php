@@ -6,7 +6,7 @@
  * You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 4
+ * @version 5
  */
 class RDB
 {
@@ -19,9 +19,9 @@ class RDB
     private array $_columns;
     private string $_statement = R::EMPTY;
     private array $_data;
-    private array $_where = array();
-    private array $_join = array();
-    private array $_union = array();
+    private array $_where = [];
+    private array $_join = [];
+    private array $_union = [];
     private int $_wherePointer = 0;
     private string $_orderBy;
     private ?int $_limit;
@@ -39,26 +39,26 @@ class RDB
     /**
      * Start method initiates the database connection using the provided configuration.
      * This method sets up a connection to a MySQL database with the specified parameters:
-     * - 'host': The hostname or IP address of the database server.
+     * - 'host': The hostname.
      * - 'dbname': The name of the database to connect to.
      * - 'charset': The character encoding used for the connection.
      * - 'user': The username for the database connection.
      * - 'password': The password for the database user.
-     * - 'prefix': Tables prefix, put an empty string if not used.
      * - 'sqlPath': The path to SQL files (used for database setup and scripts execution).
      * If the connection is successfully established, it returns an instance of the RDB class,
      * which can be used to interact with the database.
      * If any errors occur during the connection attempt, it throws a PDOException with an error message.
      * @param array $args An associative array containing the necessary configuration parameters.
+     * @param array $options The DSN options.
      * @throws PDOException If a connection error occurs, a PDOException is thrown.
      */
-    public static function start(array $args): void
+    public static function start(array $args, array $options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => true]): void
     {
-        R::checkArgument(R::allKeysExist($args, ['host', 'dbname', 'charset', 'user', 'password', /*'prefix',*/ 'sqlPath']));
+        R::checkArgument(R::allKeysExist($args, ['host', 'dbname', 'charset', 'user', 'password', 'sqlPath']));
         self::$_args = $args;
         try {
             $dsn = 'mysql:host=' . self::$_args['host'] . ';dbname=' . self::$_args['dbname'] . ';charset=' . self::$_args['charset'];
-            $dsn_options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES => true];
+            $dsn_options = $options;
             self::$_pdo = new PDO($dsn, self::$_args['user'], self::$_args['password'], $dsn_options);
         } catch (PDOException $e) {
             throw new PDOException($e->getMessage());
@@ -445,7 +445,7 @@ class RDB
         $columns = $this->_columns;
         R::prefix(':', $columns);
 
-        $inserted = array();
+        $inserted = [];
         for ($j = 0; $j < $amount; $j++) {
             for ($i = 0; $i < count($columns); $i++)
                 $stmt->bindValue($columns[$i], $this->_data[$i][$j]);

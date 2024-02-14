@@ -3,7 +3,7 @@
 /**
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 4
+ * @version 5
  */
 class RDB_Where
 {
@@ -12,7 +12,7 @@ class RDB_Where
     private string $_table;
     private string $_column;
     private string $_operation;
-    private array $_values = array();
+    private array $_values = [];
 
     public function __construct(RDB $owner, int $index, string $table, string $column, string $comparator = R::EMPTY, mixed $value = null)
     {
@@ -136,6 +136,4 @@ class RDB_Where
                 $this->_values[0]->bindValues_SELECT($stmt, false);
             else $stmt->bindValue(':' . str_replace('.', '_', $this->_column) . '_' . $this->_index . '_' . $i, $this->_values[$i], RDB::getType($this->_values[$i]));
     }
-
-
 }

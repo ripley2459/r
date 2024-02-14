@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 15
+ * @version 16
  */
 class R
 {
@@ -24,7 +24,7 @@ class R
      * Primitive event system.
      * @var array The array that contains every event and their functions.
      */
-    private static array $_events = array();
+    private static array $_events = [];
 
     /**
      * Check if provided parameters are presents in the GET or in the POST superglobal.
@@ -76,7 +76,7 @@ class R
      */
     public static function recursiveScan(string $path): array
     {
-        $r = array();
+        $r = [];
         $files = self::rScan($path);
         foreach ($files as $file) {
             if (is_dir($path . $file)) {
@@ -145,16 +145,19 @@ class R
     }
 
     /**
-     * Clamp int|float within bounds.
-     * @param int|float $value
-     * @param int|float $min
-     * @param int|float $max
-     * @return int|float
+     * Linearly interpolates between two values.
+     * This method calculates a value between $min and $max based on the given $value.
+     * The result is interpolated linearly within the range [$min, $max].
+     * @param int|float $min The minimum value.
+     * @param int|float $max The maximum value.
+     * @param int|float $value The interpolation factor. Should be between 0 and 1.
+     * @return int|float The interpolated value.
+     * @throws InvalidArgumentException If $min is greater than $max.
      */
-    public static function clamp(int|float $value, int|float $min, int|float $max): int|float
+    public static function lerp(int|float $min, int|float $max, int|float $value): int|float
     {
         self::checkArgument($max > $min, 'Min cannot be greater than max!');
-        return $value < $min ? $min : min($value, $max);
+        return $min + ($max - $min) * self::clamp($value, 0.0, 1.0);
     }
 
     /**
@@ -198,6 +201,37 @@ class R
         if ($value instanceof Countable)
             return count($value) === 0;
         return empty($value);
+    }
+
+    /**
+     * Clamp int|float within bounds.
+     * @param int|float $value
+     * @param int|float $min
+     * @param int|float $max
+     * @return int|float
+     */
+    public static function clamp(int|float $value, int|float $min, int|float $max): int|float
+    {
+        self::checkArgument($max > $min, 'Min cannot be greater than max!');
+        return $value < $min ? $min : min($value, $max);
+    }
+
+    /**
+     * Remaps a value from one range to another.
+     * This method takes a value within a given range (originalMin to originalMax) and remaps it to a new range (destinationMin to destinationMax).
+     * @param int|float $value The value to be remapped.
+     * @param int|float $originalMin The minimum value of the original range.
+     * @param int|float $originalMax The maximum value of the original range.
+     * @param int|float $destinationMin The minimum value of the destination range.
+     * @param int|float $destinationMax The maximum value of the destination range.
+     * @return int|float The remapped value.
+     * @throws InvalidArgumentException If either the original range or the destination range is invalid.
+     */
+    public static function remap(int|float $value, int|float $originalMin, int|float $originalMax, int|float $destinationMin, int|float $destinationMax): int|float
+    {
+        self::checkArgument($originalMax > $originalMin, 'Min cannot be greater than max!');
+        self::checkArgument($destinationMax > $destinationMin, 'Min cannot be greater than max!');
+        return $destinationMin + ($value - $originalMin) * ($destinationMax - $destinationMin) / ($originalMax - $originalMin);
     }
 
     /**
@@ -307,29 +341,33 @@ class R
     /**
      * Primitive event system.
      * Allow you to bind a function to an event.
+     * ```
+     * R::bind('myEvent', function(int $x) { return $x++; });
+     * ```
      * @param string $name The name of your event.
      * @param callable $function The function that will be executed when R::call($name) is called.
      * @return void
      * @see call
      * @see unbind
-     * @example R::bind('myEvent', function(int $x) { return $x++; });
      */
     public static function bind(string $name, callable $function): void
     {
         self::checkArgument(!self::blank($name) && is_callable($function), 'Invalid event binding!');
         if (!isset(self::$_events[$name]))
-            self::$_events[$name] = array();
+            self::$_events[$name] = [];
         self::$_events[$name][] = $function;
     }
 
     /**
      * Primitive event system.
      * Allow you to delete an event.
+     * ```
+     * R::unbind('myEvent');
+     * ```
      * @param string $name The name of your event.
      * @return void
      * @see call
      * @see bind
-     * @example R::unbind('myEvent');
      */
     public static function unbind(string $name): void
     {
@@ -339,11 +377,13 @@ class R
     /**
      * Primitive event system.
      * Allows you to perform each function bound to the provided event.
+     * ```
+     * R::call('myEvent', 2);
+     * ```
      * @param string $name The name of your event.
      * @return void
      * @see unbind
      * @see bind
-     * @example R::call('myEvent', 2);
      */
     public static function call(string $name): void
     {
@@ -613,7 +653,7 @@ class R
      *  - add(mixed $element): Adds an element to the current level of the nested array and returns the Drawer object.
      *  - open(): Creates and returns a new Drawer object for nesting and adds it to the current level of the nested array.
      *  - close(): Closes the current level of nesting and returns either the parent Drawer object or the final nested array.
-     *  - get(): Returns the nested array represented by the Drawer object.
+     *  - get(): Returns the final nested array represented by the Drawer object.
      *  The class uses a private nested class to implement the fluent interface for creating nested arrays.
      *
      *  Example Usage:
@@ -705,5 +745,63 @@ class R
             $array[] = $a;
         });
         return $array;
+    }
+
+    /**
+     * Check if at least one element in the iterable satisfies the given condition.
+     * ```
+     * R::one($values, fn($v) => $v > 1)
+     * ```
+     * @param iterable $values The iterable to check.
+     * @param callable $function The condition to apply to each element. It should return a boolean.
+     * @return bool True if at least one element satisfies the condition, false otherwise.
+     */
+    public static function one(iterable $values, callable $function): bool
+    {
+        foreach ($values as $item)
+            if ($function($item))
+                return true;
+        return false;
+    }
+
+    /**
+     * Determines if half OR more of the elements in the provided iterable satisfy a given condition.
+     * ```
+     * R::half($values, fn($v) => $v > 1)
+     * ```
+     * @param iterable $values The iterable containing the elements to be evaluated.
+     * @param callable $function The callback function used to test each element. It should return a boolean.
+     * @param bool $strict Optional. If set to true, strict comparison is used to determine if MORE than half of the elements satisfy the condition.
+     * @return bool True if more than half of the elements satisfy the condition, false otherwise.
+     */
+    public static function half(iterable $values, callable $function, bool $strict = false): bool
+    {
+        $size = 0;
+        $validate = 0;
+
+        foreach ($values as $item) {
+            $size++;
+            if ($function($item))
+                $validate++;
+        }
+
+        return $strict ? $validate > ($size / 2) : $validate >= ($size / 2);
+    }
+
+    /**
+     * Checks if all elements in the provided iterable satisfy the given condition.
+     * ```
+     * R::half($values, fn($v) => $v > 1)
+     * ```
+     * @param iterable $values The iterable to check.
+     * @param callable $function The condition to be satisfied by each element. It should return a boolean.
+     * @return bool True if all elements satisfy the condition, false otherwise.
+     */
+    public static function all(iterable $values, callable $function): bool
+    {
+        foreach ($values as $item)
+            if (!$function($item))
+                return false;
+        return true;
     }
 }
