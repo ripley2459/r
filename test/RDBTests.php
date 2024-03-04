@@ -37,8 +37,8 @@ class RDBTests extends TestCase
         $select = RDB::select('users', 'name')->where('age', '>', 10)->where('gender', '=', 0)->orderBy('age', 'DESC');
         $this->assertSame('SELECT name FROM users WHERE (age > :age_0_0 AND gender = :gender_1_0) ORDER BY age DESC', $select->getStatement());
 
-        $select = RDB::select('users', 'name')->where('age', '>', 10)->or()->where('name')->endWith('J');
-        $this->assertSame('SELECT name FROM users WHERE age > :age_0_0 OR name LIKE :name_1_0', $select->getStatement());
+        $select = RDB::selectDistinct('users', 'name')->where('age', '>', 10)->or()->where('name')->endWith('J');
+        $this->assertSame('SELECT DISTINCT name FROM users WHERE age > :age_0_0 OR name LIKE :name_1_0', $select->getStatement());
 
         $select = RDB::select('users', 'name')->where('age', '>', 10)->or()->where('name')->endWith('J')->where('gender', '=', 0);
         $this->assertSame('SELECT name FROM users WHERE age > :age_0_0 OR (name LIKE :name_1_0 AND gender = :gender_2_0)', $select->getStatement());

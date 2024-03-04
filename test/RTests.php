@@ -50,6 +50,14 @@ class RTests extends TestCase
         $this->assertSame('a__B_c_____aBc', $result);
     }
 
+    public function test_flatten()
+    {
+        $arrayA = [1, [2, 3, 4], 5];
+        $arrayB = R::flattenArray($arrayA);
+
+        $this->assertSame([1, 2, 3, 4, 5], $arrayB);
+    }
+
     public function test_nextName()
     {
         $file = __DIR__ . '/file.txt';

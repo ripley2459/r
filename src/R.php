@@ -740,11 +740,11 @@ class R
      */
     public static function flattenArray(array $array): array
     {
-        $array = [];
-        array_walk_recursive($array, function ($a) use (&$array) {
-            $array[] = $a;
+        $return = [];
+        array_walk_recursive($array, function ($a) use (&$return) {
+            $return[] = $a;
         });
-        return $array;
+        return $return;
     }
 
     /**

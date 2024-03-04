@@ -103,6 +103,17 @@ class RDB
     }
 
     /**
+     * Distinct selects data from a table.
+     * @param string $table The name of the table to delete data from.
+     * @return RDB - When executed, it will return a boolean. True means that the targeted data were removed successfully.
+     */
+    public static function selectDistinct(string $table, string ...$columns): RDB
+    {
+        R::checkArgument(!R::blank($columns));
+        return new RDB('select_distinct', $table, $columns, []);
+    }
+
+    /**
      * Delete data from a table.
      * @param string $table The name of the table to delete data from.
      * @return RDB - When executed, it will return a boolean. True means that the targeted data were removed successfully.
@@ -327,7 +338,8 @@ class RDB
             'show' => 'SHOW TABLES LIKE \'' . $this->_table . '\'',
             'check' => 'CREATE TABLE ' . $this->_table . ' (' . implode(', ', $this->_data) . ')',
             'delete' => $this->getStatement_DELETE(),
-            'select' => $this->getStatement_SELECT($ol),
+            'select' => $this->getStatement_SELECT(false, $ol),
+            'select_distinct' => $this->getStatement_SELECT(true, $ol),
             'update' => $this->getStatement_UPDATE(),
             'insert' => $this->getStatement_INSERT(),
             default => R::EMPTY,
@@ -363,9 +375,9 @@ class RDB
         return $stmt;
     }
 
-    private function getStatement_SELECT(bool $ol = true): string
+    private function getStatement_SELECT(bool $distinct, bool $ol = true): string
     {
-        $stmt = R::concat(R::SPACE, 'SELECT', implode(', ', $this->_columns), 'FROM', $this->_table);
+        $stmt = R::concat(R::SPACE, $distinct ? 'SELECT DISTINCT' : 'SELECT', implode(', ', $this->_columns), 'FROM', $this->_table);
 
         foreach ($this->_join as $join)
             R::append($stmt, R::SPACE, $join);
