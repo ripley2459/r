@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 16
+ * @version 17
  */
 class R
 {
@@ -500,9 +500,10 @@ class R
      * @param string $path The path to the image file to be resized.
      * @param int $newWidth The new width of the image.
      * @param int|null $newHeight The new height of the image (optional).
+     * @return string The name of the generated file.
      * @throws InvalidArgumentException If the provided image path is invalid, or if the image cannot be loaded and processed.
      */
-    public static function resize(string $path, int $newWidth, int $newHeight = null): void
+    public static function resize(string $path, int $newWidth, int $newHeight = null): string
     {
         $type = exif_imagetype($path);
         self::checkArgument(in_array($type, [2/* JPEG */, 3/* PNG */, 6/* BMP */, 18/* WEBP */]));
@@ -556,6 +557,8 @@ class R
                 imagebmp($comp, $name);
                 break;
         }
+
+        return $name;
     }
 
     /**
@@ -803,5 +806,43 @@ class R
             if (!$function($item))
                 return false;
         return true;
+    }
+
+    /**
+     * Generates a version 4 UUID.
+     * @return string The generated UUID.
+     * @throws \Random\RandomException
+     * @link
+     */
+    public static function getUUID(): string
+    {
+        $bytes = random_bytes(16);
+        $bytes[6] = chr(ord($bytes[6]) & 0x0f | 0x40); // Set version to 0100
+        $bytes[8] = chr(ord($bytes[8]) & 0x3f | 0x80); // Set bits 6-7 to 10
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($bytes), 4));
+    }
+
+    /**
+     * Purifies the input string by encoding HTML entities and special characters.
+     * This method sanitizes the input string by converting special characters to their corresponding HTML entities to prevent XSS attacks and maintain data integrity.
+     * @param string $unpurified The string to be purified.
+     * @return void
+     * @see unpurify
+     */
+    public static function purify(string &$unpurified): void
+    {
+        $unpurified = htmlentities(htmlspecialchars($unpurified));
+    }
+
+    /**
+     * Unpurifies the previously purified string by decoding HTML entities and special characters.
+     * This method reverses the purification process by decoding HTML entities and special characters back to their original form, restoring the string's original state.
+     * @param string $purified The purified string to be unpurified.
+     * @return void
+     * @see purify
+     */
+    public static function unpurify(string &$purified): void
+    {
+        $purified = html_entity_decode(htmlspecialchars_decode($purified));
     }
 }
