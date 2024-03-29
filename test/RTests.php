@@ -50,6 +50,32 @@ class RTests extends TestCase
         $this->assertSame('a__B_c_____aBc', $result);
     }
 
+    public function test_drawer()
+    {
+        $drawer = R::openDrawer()
+            ->add(01)
+            ->add(02)
+            ->add(03)
+                ->open()
+                    ->add(11)
+                    ->add(12)
+                    ->add(13)
+                    ->open()
+                        ->add(21)
+                        ->add(22)
+                        ->add(23)
+                    ->close()
+                    ->open()
+                        ->add(31)
+                        ->add(32)
+                        ->add(33)
+                    ->close()
+                ->close()
+            ->close();
+
+        $this->assertSame([01, 02, 03, [11, 12, 13, [21, 22, 23], [31, 32, 33]]], $drawer);
+    }
+
     public function test_flatten()
     {
         $arrayA = [1, [2, 3, 4], 5];
