@@ -25,4 +25,4 @@ vendor/bin/phpunit test/RDBTests.php
 
 ## Credits
 
-- core_styling.css is heavily based on [Skeleton](getskeleton.com) and [Normalize](git.io/normalize) both under MIT licence.
+- core_styling.css is heavily based on [Skeleton](http://getskeleton.com/) and [Normalize](https://necolas.github.io/normalize.css/) both under MIT licence.
