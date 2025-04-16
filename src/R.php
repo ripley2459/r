@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 17
+ * @version 18
  */
 class R
 {
@@ -26,6 +26,8 @@ class R
      */
     private static array $_events = [];
 
+    private static array $_exisfImageType = [2/* JPEG */, 3/* PNG */, 6/* BMP */, 18/* WEBP */];
+
     /**
      * Check if provided parameters are presents in the GET or in the POST superglobal.
      * @param string ...$parameters
@@ -38,6 +40,16 @@ class R
             if (!(isset($_GET[$arg]) || isset($_POST[$arg])))
                 throw new InvalidArgumentException('Missing argument: ' . $arg . '!');
         }
+    }
+
+    /**
+     * Check if provided parameter is presents in the GET or in the POST superglobal.
+     * @param string $parameter
+     * @return bool
+     */
+    public static function optional(string $parameter): bool
+    {
+        return isset($_GET[$parameter]) || isset($_POST[$parameter]);
     }
 
     /**
@@ -503,10 +515,38 @@ class R
      * @return string The name of the generated file.
      * @throws InvalidArgumentException If the provided image path is invalid, or if the image cannot be loaded and processed.
      */
-    public static function resize(string $path, int $newWidth, int $newHeight = null): string
+    public static function resizeImage(string $path, int $newWidth, int $newHeight = null): string
     {
         $type = exif_imagetype($path);
-        self::checkArgument(in_array($type, [2/* JPEG */, 3/* PNG */, 6/* BMP */, 18/* WEBP */]));
+        self::checkArgument(in_array($type, self::$_exisfImageType));
+
+        $image = self::resize_IMPL($path, $newWidth, $newHeight);
+
+        $name = $path;
+        $suffix = '_' . $newWidth . 'x' . ($newHeight ?? $newWidth);
+        self::suffix($suffix, $name);
+        switch ($type) {
+            case 2:
+                imagejpeg($image, $name, 100);
+                break;
+            case 3:
+                imagepng($image, $name, 0);
+                break;
+            case 18:
+                imagewebp($image, $name);
+                break;
+            case 6:
+                imagebmp($image, $name);
+                break;
+        }
+
+        return $name;
+    }
+
+    private static function resize_IMPL(string $path, int $newWidth, int $newHeight = null): GDImage
+    {
+        $type = exif_imagetype($path);
+        self::checkArgument(in_array($type, self::$_exisfImageType));
 
         $imageData = file_get_contents($path);
         self::checkArgument($imageData !== false);
@@ -540,25 +580,7 @@ class R
 
         self::checkArgument(imagecopyresampled($comp, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height));
 
-        $name = $path;
-        $suffix = '_' . $newWidth . 'x' . ($newHeight ?? $newWidth);
-        self::suffix($suffix, $name);
-        switch ($type) {
-            case 2:
-                imagejpeg($comp, $name, 100);
-                break;
-            case 3:
-                imagepng($comp, $name, 0);
-                break;
-            case 18:
-                imagewebp($comp, $name);
-                break;
-            case 6:
-                imagebmp($comp, $name);
-                break;
-        }
-
-        return $name;
+        return $comp;
     }
 
     /**
@@ -583,6 +605,38 @@ class R
                 self::checkArgument(self::canBeString($element), 'The suffix function works only with strings!');
                 $buildValue($suffix, $element);
             });
+    }
+
+    /**
+     * @param string $source The first image.
+     * @param string $other The second image.
+     * @param int $precision A value between 1 and 6.
+     * @return float The percentage of correspondence between the two images.
+     */
+    public static function compareImages(string $source, string $other, int $precision = 3): float
+    {
+        $type = exif_imagetype($source);
+        self::checkArgument(in_array($type, self::$_exisfImageType));
+
+        $type = exif_imagetype($other);
+        self::checkArgument(in_array($type, self::$_exisfImageType));
+
+        $size = pow(2, self::clamp($precision, 0, 6));
+
+        $rs = self::resize_IMPL($source, $size, $size);
+        $ro = self::resize_IMPL($other, $size, $size);
+
+        $same = 0;
+        for ($x = 0; $x < $size; $x++) {
+            for ($y = 0; $y < $size; $y++) {
+                $cs = imagecolorat($rs, $x, $y);
+                $co = imagecolorat($ro, $x, $y);
+                if ($cs == $co)
+                    $same++;
+            }
+        }
+
+        return $same / ($size * $size);
     }
 
     /**
@@ -652,12 +706,12 @@ class R
 
     /**
      *  This PHP code "opens a drawer" whose have methods to manipulate nested arrays in a fluent manner.
+     *  The class uses a private nested class to implement the fluent interface for creating nested arrays.
      *  The 'Drawer' has the following methods:
      *  - add(mixed $element): Adds an element to the current level of the nested array and returns the Drawer object.
      *  - open(): Creates and returns a new Drawer object for nesting and adds it to the current level of the nested array.
      *  - close(): Closes the current level of nesting and returns either the parent Drawer object or the final nested array.
      *  - get(): Returns the final nested array represented by the Drawer object.
-     *  The class uses a private nested class to implement the fluent interface for creating nested arrays.
      *
      *  Example Usage:
      *  ```
@@ -794,7 +848,7 @@ class R
     /**
      * Checks if all elements in the provided iterable satisfy the given condition.
      * ```
-     * R::half($values, fn($v) => $v > 1)
+     * R::all($values, fn($v) => $v > 1)
      * ```
      * @param iterable $values The iterable to check.
      * @param callable $function The condition to be satisfied by each element. It should return a boolean.
