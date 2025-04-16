@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 18
+ * @version 17
  */
 class R
 {
@@ -608,35 +608,47 @@ class R
     }
 
     /**
-     * @param string $source The first image.
-     * @param string $other The second image.
-     * @param int $precision A value between 1 and 6.
-     * @return float The percentage of correspondence between the two images.
+     * Compares a source image to one or multiple other images based on pixel similarity.
+     * The comparison is done by resizing all images to a square of size 2^precision, and comparing each pixel. The function returns an array of similarity ratios, each being a float between 0 and 1.
+     * @param string $source Path to the source image file.
+     * @param string|array $other A path or an array of paths to images to compare with the source.
+     * @param int $precision A value from 0 to 6 that controls the resize resolution (default: 3). The final size will be 2^precision.
+     * @return array An array of floats, each representing the similarity (between 0 and 1) between the source image and each corresponding image in $other.
+     * @throws InvalidArgumentException If any of the image paths is not a supported image type.
      */
-    public static function compareImages(string $source, string $other, int $precision = 3): float
+    public static function compareImages(string $source, string|array $other, int $precision = 3): array
     {
         $type = exif_imagetype($source);
         self::checkArgument(in_array($type, self::$_exisfImageType));
 
-        $type = exif_imagetype($other);
-        self::checkArgument(in_array($type, self::$_exisfImageType));
+        if (!is_array($other))
+            $other = [$other];
 
-        $size = pow(2, self::clamp($precision, 0, 6));
+        $results = [];
 
-        $rs = self::resize_IMPL($source, $size, $size);
-        $ro = self::resize_IMPL($other, $size, $size);
+        foreach ($other as $o) {
+            $type = exif_imagetype($o);
+            self::checkArgument(in_array($type, self::$_exisfImageType));
 
-        $same = 0;
-        for ($x = 0; $x < $size; $x++) {
-            for ($y = 0; $y < $size; $y++) {
-                $cs = imagecolorat($rs, $x, $y);
-                $co = imagecolorat($ro, $x, $y);
-                if ($cs == $co)
-                    $same++;
+            $size = pow(2, self::clamp($precision, 0, 6));
+
+            $rs = self::resize_IMPL($source, $size, $size);
+            $ro = self::resize_IMPL($o, $size, $size);
+
+            $same = 0;
+            for ($x = 0; $x < $size; $x++) {
+                for ($y = 0; $y < $size; $y++) {
+                    $cs = imagecolorat($rs, $x, $y);
+                    $co = imagecolorat($ro, $x, $y);
+                    if ($cs == $co)
+                        $same++;
+                }
             }
+
+            $results[] = $same / ($size * $size);
         }
 
-        return $same / ($size * $size);
+        return $results;
     }
 
     /**
