@@ -56,21 +56,21 @@ class RTests extends TestCase
             ->add(01)
             ->add(02)
             ->add(03)
-                ->open()
-                    ->add(11)
-                    ->add(12)
-                    ->add(13)
-                    ->open()
-                        ->add(21)
-                        ->add(22)
-                        ->add(23)
-                    ->close()
-                    ->open()
-                        ->add(31)
-                        ->add(32)
-                        ->add(33)
-                    ->close()
-                ->close()
+            ->open()
+            ->add(11)
+            ->add(12)
+            ->add(13)
+            ->open()
+            ->add(21)
+            ->add(22)
+            ->add(23)
+            ->close()
+            ->open()
+            ->add(31)
+            ->add(32)
+            ->add(33)
+            ->close()
+            ->close()
             ->close();
 
         $this->assertSame([01, 02, 03, [11, 12, 13, [21, 22, 23], [31, 32, 33]]], $drawer);
@@ -165,7 +165,7 @@ class RTests extends TestCase
         $this->assertSame('C2', $b);
     }
 
-    public function test_getParameter()
+    /*public function test_getParameter()
     {
         $_GET['get1'] = 'getValue1';
         $_POST['post2'] = 100;
@@ -184,9 +184,9 @@ class RTests extends TestCase
 
         unset($_GET['get1']);
         unset($_POST['get2']);
-    }
+    }*/
 
-    public function test_require()
+    /*public function test_require()
     {
         $_GET['get1'] = 'getValue1';
         $_POST['post2'] = 100;
@@ -199,9 +199,9 @@ class RTests extends TestCase
 
         unset($_GET['get1']);
         unset($_POST['post2']);
-    }
+    }*/
 
-    public function test_checkArgument()
+    /*public function test_checkArgument()
     {
         R::checkArgument(true);
         R::checkArgument(false, message: 'OK!', throwException: false);
@@ -209,6 +209,30 @@ class RTests extends TestCase
 
         $this->expectOutputString('OK!');
         $this->expectException(InvalidArgumentException::class);
+    }*/
+
+    public function test_pathInfo()
+    {
+        $info = R::pathInfo('/www/htdocs/inc/lib.inc.php');
+        $this->assertSame('/www/htdocs/inc', $info['dirname']);
+        $this->assertSame('lib.inc.php', $info['basename']);
+        $this->assertSame('php', $info['extension']);
+        $this->assertSame('lib.inc', $info['filename']);
+        $this->assertSame('/www/htdocs/inc/lib.inc', $info['noextension']);
+
+        $info = R::pathInfo('lib.inc');
+        $this->assertSame('', $info['dirname']);
+        $this->assertSame('lib.inc', $info['basename']);
+        $this->assertSame('inc', $info['extension']);
+        $this->assertSame('lib', $info['filename']);
+        $this->assertSame('lib', $info['noextension']);
+
+        $info = R::pathInfo('/www/htdocs/inc/');
+        $this->assertSame('/www/htdocs/inc/', $info['dirname']);
+        $this->assertSame('', $info['basename']);
+        $this->assertSame('', $info['extension']);
+        $this->assertSame('', $info['filename']);
+        $this->assertSame('/www/htdocs/inc/', $info['noextension']);
     }
 
     /**

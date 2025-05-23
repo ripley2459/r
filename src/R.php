@@ -6,7 +6,7 @@
  * Feel free to use this file in your projects, but please be aware that it comes with no warranties or guarantees. You are responsible for testing and using these functions at your own risk.
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 17
+ * @version 18
  */
 class R
 {
@@ -428,18 +428,22 @@ class R
      * $info['basename'] = 'lib.inc.php';                    $info['basename'] = 'lib.inc.php';
      * $info['extension'] = 'php';                           $info['extension'] = '';
      * $info['filename'] = 'lib.inc';                        $info['filename'] = 'no_extension';
+     * $info['noextension'] = '/www/htdocs/inc/lib.inc';     $info['noextension'] = '/www/htdocs/inc/no_extension';
      * ```
      * @param string $path The file path to extract information from.
-     * @return array An associative array containing information about the file path, including 'dirname', 'basename', 'extension', and 'filename'.
+     * @return array An associative array containing information about the file path, including 'dirname', 'basename', 'extension', 'filename' and 'noextension'.
      * @see pathinfo()
      */
     public static function pathInfo(string $path): array
     {
+        $folder = str_ends_with($path, '/');
         $infos = pathinfo($path);
-        $infos['dirname'] = isset($infos['dirname']) && $infos['dirname'] != '.' ? $infos['dirname'] : self::EMPTY;
-        $infos['basename'] = $infos['basename'] ?? self::EMPTY;
-        $infos['extension'] = $infos['extension'] ?? self::EMPTY;
-        $infos['filename'] = $infos['filename'] ?? self::EMPTY;
+        $infos['dirname'] = $folder ? $path : (isset($infos['dirname']) && $infos['dirname'] != '.' ? $infos['dirname'] : self::EMPTY);
+        $infos['basename'] = $folder ? self::EMPTY : $infos['basename'] ?? self::EMPTY;
+        $infos['extension'] = $folder ? self::EMPTY : $infos['extension'] ?? self::EMPTY;
+        $infos['filename'] = $folder ? self::EMPTY : $infos['filename'] ?? self::EMPTY;
+        $infos['noextension'] = $folder ? $infos['dirname'] : R::concat('/', $infos['dirname'], $infos['filename']);
+
         return $infos;
     }
 

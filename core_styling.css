@@ -4,8 +4,16 @@
  * - Skeleton 2.0.4 by Dave Gamache | MIT | http://getskeleton.com/
  * @author Cyril Neveu
  * @link https://github.com/ripley2459/r
- * @version 3
+ * @version 4
  */
+
+/****************************************************
+ * Root
+ */
+
+:root {
+    --masonry-gap: 15px;
+}
 
 /****************************************************
  * Reset
@@ -487,15 +495,15 @@ tr:hover {
 
 .masonry {
     column-count: 4;
-    column-gap: 15px;
+    column-gap: var(--masonry-gap);
 }
 
 .masonry > * {
     width: 100%;
     position: relative;
     break-inside: avoid-column;
-    margin-bottom: 15px;
-    display: block;
+    margin-bottom: var(--masonry-gap);
+    display: inherit;
 }
 
 /**
